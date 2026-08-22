@@ -185,6 +185,8 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 
 .site-footer { display: grid; gap: 3px; padding: 18px 0 34px; color: var(--graphite); font-size: .65rem; line-height: 1.5; }
 .site-footer p { margin: 0; }
+.site-footer__notes { display: grid; gap: 3px; }
+.site-credit { color: var(--ink); font-weight: 800; letter-spacing: .04em; }
 
 /* Training log — a waterproof coach sheet, not a generic dashboard. */
 .course-home { padding-top: 34px; }

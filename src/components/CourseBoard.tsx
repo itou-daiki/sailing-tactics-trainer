@@ -1,12 +1,21 @@
-import type { Frame, Point, ScenarioReplay } from "../domain/simulation";
+import type { Frame, Point } from "../domain/simulation";
 import { BOAT_LENGTH_PX } from "../domain/simulation";
+
+interface TrackReplay {
+  frames: Frame[];
+}
+
+export interface CourseComparison {
+  replay: TrackReplay;
+  variant: "coach" | "no-tack";
+  label: string;
+}
 
 interface CourseBoardProps {
   frame: Frame;
-  replay: ScenarioReplay;
-  coachReplay: ScenarioReplay;
-  noTackReplay: ScenarioReplay;
-  showGhosts: boolean;
+  replay: TrackReplay;
+  comparisons?: CourseComparison[];
+  leg?: "upwind" | "downwind";
 }
 
 const screenPoint = (point: Point) => ({
@@ -14,7 +23,7 @@ const screenPoint = (point: Point) => ({
   y: 525 - (point.y - 90) * 1.35,
 });
 
-const polylinePoints = (replay: ScenarioReplay, until: number) =>
+const polylinePoints = (replay: TrackReplay, until: number) =>
   replay.frames
     .slice(0, until + 1)
     .map((item) => screenPoint(item.user))
@@ -50,9 +59,8 @@ function Boat({
 export function CourseBoard({
   frame,
   replay,
-  coachReplay,
-  noTackReplay,
-  showGhosts,
+  comparisons = [],
+  leg = "upwind",
 }: CourseBoardProps) {
   const userPosition = screenPoint(frame.user);
   const opponentPosition = screenPoint(frame.opponent);
@@ -91,10 +99,17 @@ export function CourseBoard({
           ))}
         </g>
 
-        <g className="course-mark" transform="translate(275 45)">
-          <path d="M 0 -19 L 17 14 L -17 14 Z" />
-          <line x1="-27" y1="22" x2="27" y2="22" />
-          <text x="0" y="40" textAnchor="middle">風上マーク</text>
+        <g className="course-mark" transform={`translate(275 ${leg === "upwind" ? 45 : 515})`}>
+          <path d={leg === "upwind" ? "M 0 -19 L 17 14 L -17 14 Z" : "M 0 19 L 17 -14 L -17 -14 Z"} />
+          <line
+            x1="-27"
+            y1={leg === "upwind" ? 22 : -22}
+            x2="27"
+            y2={leg === "upwind" ? 22 : -22}
+          />
+          <text x="0" y={leg === "upwind" ? 40 : -30} textAnchor="middle">
+            {leg === "upwind" ? "風上マーク" : "風下マーク"}
+          </text>
         </g>
 
         <g className="mean-wind-axis">
@@ -102,10 +117,15 @@ export function CourseBoard({
           <text x="284" y="105">平均風向</text>
         </g>
 
-        {showGhosts ? (
+        {comparisons.length > 0 ? (
           <g className="ghost-tracks" aria-label="比較航跡">
-            <polyline className="track track--coach" points={polylinePoints(coachReplay, frame.time)} />
-            <polyline className="track track--no-tack" points={polylinePoints(noTackReplay, frame.time)} />
+            {comparisons.map((comparison) => (
+              <polyline
+                key={`${comparison.variant}-${comparison.label}`}
+                className={`track track--${comparison.variant}`}
+                points={polylinePoints(comparison.replay, frame.time)}
+              />
+            ))}
           </g>
         ) : null}
 
@@ -126,11 +146,15 @@ export function CourseBoard({
         <Boat point={frame.user} heading={frame.user.heading} label="自艇" variant="user" />
       </svg>
 
-      {showGhosts ? (
+      {comparisons.length > 0 ? (
         <div className="course-legend" aria-label="航跡の凡例">
           <span><i className="legend-line legend-line--actual" />あなた</span>
-          <span><i className="legend-line legend-line--coach" />コーチ例</span>
-          <span><i className="legend-line legend-line--hold" />タックなし</span>
+          {comparisons.map((comparison) => (
+            <span key={`${comparison.variant}-${comparison.label}`}>
+              <i className={`legend-line legend-line--${comparison.variant === "coach" ? "coach" : "hold"}`} />
+              {comparison.label}
+            </span>
+          ))}
         </div>
       ) : null}
     </section>

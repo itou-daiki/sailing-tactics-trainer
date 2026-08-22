@@ -9,9 +9,11 @@ import {
 export function CourseHome({
   progress,
   onOpenLesson,
+  onOpenFreeSimulation,
 }: {
   progress: CourseProgress;
   onOpenLesson: (lessonId: LessonId) => void;
+  onOpenFreeSimulation: () => void;
 }) {
   const completed = getCompletedCount(progress);
   const recommendedId = getRecommendedLessonId(progress);
@@ -90,6 +92,24 @@ export function CourseHome({
             );
           })}
         </ol>
+      </section>
+
+      <section className="free-launch" aria-labelledby="free-launch-title">
+        <div className="free-launch__mast" aria-hidden="true">
+          <span>∞</span>
+        </div>
+        <div className="free-launch__copy">
+          <div className="section-kicker">OPEN WATER / FREE SAIL</div>
+          <h2 id="free-launch-title">条件を変えて、自由に走る。</h2>
+          <p>上り・下り、風の振れ戻り、艇間距離、相手の反応を設定。タックやジャイブを何度でも試せます。</p>
+        </div>
+        <div className="free-launch__meta">
+          <span>点数なし</span>
+          <span>回数制限なし</span>
+        </div>
+        <button type="button" onClick={onOpenFreeSimulation}>
+          海面をつくる <span aria-hidden="true">→</span>
+        </button>
       </section>
 
       <aside className="course-principle">

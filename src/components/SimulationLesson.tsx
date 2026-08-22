@@ -233,9 +233,10 @@ export function SimulationLesson({
           <CourseBoard
             frame={currentFrame}
             replay={replay}
-            coachReplay={coachReplay}
-            noTackReplay={noTackReplay}
-            showGhosts={phase === "replay"}
+            comparisons={phase === "replay" ? [
+              { replay: coachReplay, variant: "coach", label: "コーチ例" },
+              { replay: noTackReplay, variant: "no-tack", label: "タックなし" },
+            ] : []}
           />
 
           {phase === "playing" ? (

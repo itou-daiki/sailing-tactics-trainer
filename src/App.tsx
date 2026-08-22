@@ -74,11 +74,14 @@ export default function App() {
       <a className="skip-link" href="#main-content">本文へ移動</a>
       <main id="main-content" className="app">
         <header className="site-header">
-          <button type="button" className="brand" onClick={openCourse}>
-            <span className="brand__signal" aria-hidden="true" />
-            <strong>SHIFT</strong>
-            <small>420 TACTICS</small>
-          </button>
+          <div className="brand-lockup">
+            <button type="button" className="brand" onClick={openCourse}>
+              <span className="brand__signal" aria-hidden="true" />
+              <strong>SHIFT</strong>
+              <small>420 TACTICS</small>
+            </button>
+            <span className="header-credit">Created by Dit-Lab.</span>
+          </div>
           {lesson || isFreeSimulation ? (
             <div className="header-lesson-tools">
               <button type="button" className="back-to-course" onClick={openCourse}>← コース</button>

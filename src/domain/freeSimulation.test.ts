@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FREE_CONFIG,
   FREE_SCENARIO_MAX_DURATION,
+  analyzeFirstManeuverTiming,
   getFreeWindAngle,
+  getFreeWindTimeline,
   getOpponentManeuverTimes,
+  getRelativeGainDifferenceAtCommonTime,
   runFreeScenario,
   type FreeScenarioConfig,
 } from "./freeSimulation";
@@ -18,6 +21,18 @@ describe("フリーシミュレーション", () => {
     expect(getFreeWindAngle(10, config())).toBe(10);
     expect(getFreeWindAngle(30, config())).toBe(0);
     expect(getFreeWindAngle(30, config({ windPattern: "hold" }))).toBe(10);
+  });
+
+  it("風の変化速度によって、最大振れと振れ戻りの時刻が変わる", () => {
+    expect(getFreeWindTimeline(config({ windTempo: "quick" }))).toEqual({
+      shiftStart: 2,
+      peak: 7,
+      returnStart: 11,
+      returnEnd: 22,
+    });
+    expect(getFreeWindAngle(7, config({ windTempo: "quick" }))).toBe(10);
+    expect(getFreeWindAngle(22, config({ windTempo: "quick" }))).toBe(0);
+    expect(getFreeWindAngle(22, config({ windTempo: "slow" }))).toBe(10);
   });
 
   it("右振れでは右側の自艇に暫定ゲインが生まれ、戻ると小さくなる", () => {
@@ -43,6 +58,39 @@ describe("フリーシミュレーション", () => {
   it("カバー設定では相手が2秒後に同じ操作をする", () => {
     const times = getOpponentManeuverTimes(config({ opponentMode: "cover" }), [7, 18]);
     expect(times).toEqual([9, 20]);
+  });
+
+  it("同じ時刻で操作ありと操作なしのゲイン差を比較する", () => {
+    const active = runFreeScenario(config({ opponentMode: "hold" }), [10]);
+    const baseline = runFreeScenario(config({ opponentMode: "hold" }), []);
+    const comparison = getRelativeGainDifferenceAtCommonTime(active, baseline);
+
+    expect(comparison.time).toBe(Math.min(active.endTime, baseline.endTime));
+    expect(Number.isFinite(comparison.difference)).toBe(true);
+  });
+
+  it("最初の操作を前後4秒にずらした比較から、再試行の方向を返す", () => {
+    const analysis = analyzeFirstManeuverTiming(
+      config({ opponentMode: "hold" }),
+      [14],
+    );
+
+    expect(analysis).not.toBeNull();
+    expect(analysis?.trials.map((trial) => trial.offset)).toEqual([-4, 0, 4]);
+    expect(analysis?.trials.map((trial) => trial.maneuverTime)).toEqual([10, 14, 18]);
+    expect([-4, 0, 4]).toContain(analysis?.bestOffset);
+  });
+
+  it("複数回操作した場合は、操作間隔を保って全体を前後へずらす", () => {
+    const analysis = analyzeFirstManeuverTiming(config(), [10, 18]);
+
+    expect(analysis?.trials[0].maneuverTimes).toEqual([6, 14]);
+    expect(analysis?.trials[1].maneuverTimes).toEqual([10, 18]);
+    expect(analysis?.trials[2].maneuverTimes).toEqual([14, 22]);
+  });
+
+  it("操作していない場合はタイミング比較を作らない", () => {
+    expect(analyzeFirstManeuverTiming(config(), [])).toBeNull();
   });
 
   it("振れ幅0度では誤解のないイベント名を返す", () => {
@@ -72,18 +120,20 @@ describe("フリーシミュレーション", () => {
     for (const leg of ["upwind", "downwind"] as const) {
       for (const shiftAngle of [-18, 0, 18]) {
         for (const windPattern of ["hold", "return", "return-past"] as const) {
-          const replay = runFreeScenario(config({ leg, shiftAngle, windPattern }), [12, 28]);
-          expect(replay.endTime).toBeLessThanOrEqual(FREE_SCENARIO_MAX_DURATION);
-          expect(replay.frames).toHaveLength(replay.endTime + 1);
-          expect(replay.frames.every((frame) => [
-            frame.windAngle,
-            frame.user.x,
-            frame.user.y,
-            frame.opponent.x,
-            frame.opponent.y,
-            frame.relativeGain,
-            frame.leverage,
-          ].every(Number.isFinite))).toBe(true);
+          for (const windTempo of ["quick", "standard", "slow"] as const) {
+            const replay = runFreeScenario(config({ leg, shiftAngle, windPattern, windTempo }), [12, 28]);
+            expect(replay.endTime).toBeLessThanOrEqual(FREE_SCENARIO_MAX_DURATION);
+            expect(replay.frames).toHaveLength(replay.endTime + 1);
+            expect(replay.frames.every((frame) => [
+              frame.windAngle,
+              frame.user.x,
+              frame.user.y,
+              frame.opponent.x,
+              frame.opponent.y,
+              frame.relativeGain,
+              frame.leverage,
+            ].every(Number.isFinite))).toBe(true);
+          }
         }
       }
     }

@@ -17,12 +17,14 @@ export const FREE_SCENARIO_MAX_DURATION = 120;
 
 export type CourseLeg = "upwind" | "downwind";
 export type WindPattern = "hold" | "return" | "return-past";
+export type WindTempo = "quick" | "standard" | "slow";
 export type OpponentMode = "hold" | "fixed" | "cover";
 
 export interface FreeScenarioConfig {
   leg: CourseLeg;
   shiftAngle: number;
   windPattern: WindPattern;
+  windTempo: WindTempo;
   leverageBoatLengths: number;
   opponentMode: OpponentMode;
 }
@@ -43,10 +45,36 @@ export interface FreeScenarioReplay {
   markDistance: number;
 }
 
+export interface FreeWindTimeline {
+  shiftStart: number;
+  peak: number;
+  returnStart: number;
+  returnEnd: number;
+}
+
+export type TimingOffset = -4 | 0 | 4;
+
+export interface TimingTrial {
+  offset: TimingOffset;
+  maneuverTime: number;
+  maneuverTimes: number[];
+  markResult: MarkResult;
+  endTime: number;
+  markDistance: number;
+  relativeGain: number;
+  maneuverLoss: number;
+}
+
+export interface TimingAnalysis {
+  bestOffset: TimingOffset;
+  trials: TimingTrial[];
+}
+
 export const DEFAULT_FREE_CONFIG: FreeScenarioConfig = {
   leg: "upwind",
   shiftAngle: 10,
   windPattern: "return",
+  windTempo: "standard",
   leverageBoatLengths: 12,
   opponentMode: "fixed",
 };
@@ -61,15 +89,30 @@ const normalizeManeuverTimes = (times: number[]) =>
     .filter((time) => time >= 0 && time <= FREE_SCENARIO_MAX_DURATION)
     .sort((a, b) => a - b);
 
+const WIND_TIMELINES: Record<WindTempo, FreeWindTimeline> = {
+  quick: { shiftStart: 2, peak: 7, returnStart: 11, returnEnd: 22 },
+  standard: { shiftStart: 4, peak: 10, returnStart: 16, returnEnd: 30 },
+  slow: { shiftStart: 6, peak: 14, returnStart: 22, returnEnd: 40 },
+};
+
+export function getFreeWindTimeline(config: FreeScenarioConfig): FreeWindTimeline {
+  return WIND_TIMELINES[config.windTempo];
+}
+
 export function getFreeWindAngle(time: number, config: FreeScenarioConfig): number {
   const safeTime = clamp(time, 0, FREE_SCENARIO_MAX_DURATION);
-  if (safeTime <= 4) return 0;
-  if (safeTime < 10) return ((safeTime - 4) / 6) * config.shiftAngle;
-  if (config.windPattern === "hold" || safeTime <= 16) return config.shiftAngle;
+  const timeline = getFreeWindTimeline(config);
+  if (safeTime <= timeline.shiftStart) return 0;
+  if (safeTime < timeline.peak) {
+    return ((safeTime - timeline.shiftStart) / (timeline.peak - timeline.shiftStart)) * config.shiftAngle;
+  }
+  if (config.windPattern === "hold" || safeTime <= timeline.returnStart) return config.shiftAngle;
 
   const endAngle = config.windPattern === "return" ? 0 : config.shiftAngle * -0.7;
-  if (safeTime < 30) {
-    return config.shiftAngle + ((safeTime - 16) / 14) * (endAngle - config.shiftAngle);
+  if (safeTime < timeline.returnEnd) {
+    return config.shiftAngle
+      + ((safeTime - timeline.returnStart) / (timeline.returnEnd - timeline.returnStart))
+      * (endAngle - config.shiftAngle);
   }
   return endAngle;
 }
@@ -145,6 +188,7 @@ export function runFreeScenario(
   const frames: Frame[] = [];
   let markResult: MarkResult = "timeout";
   const mark = config.leg === "upwind" ? UPWIND_MARK : DOWNWIND_MARK;
+  const windTimeline = getFreeWindTimeline(config);
 
   for (let time = 0; time <= FREE_SCENARIO_MAX_DURATION; time += 1) {
     const windAngle = getFreeWindAngle(time, config);
@@ -192,21 +236,21 @@ export function runFreeScenario(
   const maneuver = config.leg === "upwind" ? "タック" : "ジャイブ";
   const events: ScenarioEvent[] = [
     {
-      time: 4,
+      time: windTimeline.shiftStart,
       kind: "shift",
       label: config.shiftAngle === 0 ? "平均風向のまま" : `${direction}振れが始まる`,
     },
     {
-      time: 10,
+      time: windTimeline.peak,
       kind: "peak",
       label: config.shiftAngle === 0 ? "風向変化なし" : `${direction}振れ 最大${Math.abs(config.shiftAngle)}°`,
     },
   ];
 
   if (config.windPattern !== "hold") {
-    events.push({ time: 16, kind: "return", label: "風が戻り始める" });
+    events.push({ time: windTimeline.returnStart, kind: "return", label: "風が戻り始める" });
     events.push({
-      time: 30,
+      time: windTimeline.returnEnd,
       kind: "mean",
       label: config.windPattern === "return" ? "平均風向へ戻る" : "反対側まで戻る",
     });
@@ -248,4 +292,67 @@ export function runFreeScenario(
     markResult,
     markDistance: getMarkDistance(finalFrame.user, config.leg) / BOAT_LENGTH_PX,
   };
+}
+
+export function getRelativeGainDifferenceAtCommonTime(
+  replay: FreeScenarioReplay,
+  reference: FreeScenarioReplay,
+): { time: number; difference: number } {
+  const time = Math.min(replay.endTime, reference.endTime);
+  const replayGain = replay.frames[time].relativeGain / BOAT_LENGTH_PX;
+  const referenceGain = reference.frames[time].relativeGain / BOAT_LENGTH_PX;
+  return { time, difference: replayGain - referenceGain };
+}
+
+const MARK_RESULT_PRIORITY: Record<MarkResult, number> = {
+  timeout: 0,
+  missed: 1,
+  reached: 2,
+};
+
+const compareTimingTrials = (left: TimingTrial, right: TimingTrial) => {
+  const markDifference = MARK_RESULT_PRIORITY[right.markResult] - MARK_RESULT_PRIORITY[left.markResult];
+  if (markDifference !== 0) return markDifference;
+
+  if (left.markResult === "reached" && left.endTime !== right.endTime) {
+    return left.endTime - right.endTime;
+  }
+  if (left.markResult !== "reached" && Math.abs(left.markDistance - right.markDistance) >= 0.1) {
+    return left.markDistance - right.markDistance;
+  }
+  if (Math.abs(left.relativeGain - right.relativeGain) >= 0.1) {
+    return right.relativeGain - left.relativeGain;
+  }
+  return Math.abs(left.offset) - Math.abs(right.offset);
+};
+
+export function analyzeFirstManeuverTiming(
+  config: FreeScenarioConfig,
+  userManeuverTimes: number[],
+): TimingAnalysis | null {
+  const normalizedTimes = normalizeManeuverTimes(userManeuverTimes);
+  const firstManeuverTime = normalizedTimes[0];
+  if (firstManeuverTime === undefined) return null;
+
+  const offsets: TimingOffset[] = [-4, 0, 4];
+  const trials = offsets.map((offset): TimingTrial => {
+    const maneuverTimes = normalizeManeuverTimes(
+      normalizedTimes.map((time) => clamp(time + offset, 1, FREE_SCENARIO_MAX_DURATION)),
+    );
+    const maneuverTime = maneuverTimes[0];
+    const replay = runFreeScenario(config, maneuverTimes);
+    return {
+      offset,
+      maneuverTime,
+      maneuverTimes,
+      markResult: replay.markResult,
+      endTime: replay.endTime,
+      markDistance: replay.markDistance,
+      relativeGain: replay.finalRelativeGain,
+      maneuverLoss: replay.userManeuverLoss,
+    };
+  });
+  const bestTrial = [...trials].sort(compareTimingTrials)[0];
+
+  return { bestOffset: bestTrial.offset, trials };
 }

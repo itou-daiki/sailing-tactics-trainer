@@ -3,11 +3,16 @@ import { CourseBoard, type CourseComparison } from "./CourseBoard";
 import { BOAT_LENGTH_PX } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
+  analyzeFirstManeuverTiming,
+  getFreeWindTimeline,
+  getRelativeGainDifferenceAtCommonTime,
   runFreeScenario,
   type CourseLeg,
   type FreeScenarioConfig,
   type OpponentMode,
+  type TimingAnalysis,
   type WindPattern,
+  type WindTempo,
 } from "../domain/freeSimulation";
 
 type FreePhase = "setup" | "playing" | "replay";
@@ -16,6 +21,12 @@ const WIND_PATTERNS: Array<{ value: WindPattern; label: string; note: string }> 
   { value: "return", label: "平均へ戻る", note: "暫定ゲインが消える過程を見る" },
   { value: "hold", label: "振れたまま", note: "パーシステントシフトを試す" },
   { value: "return-past", label: "反対まで戻る", note: "有利側が逆転する場面を見る" },
+];
+
+const WIND_TEMPOS: Array<{ value: WindTempo; label: string; note: string }> = [
+  { value: "quick", label: "すばやい", note: "7秒で最大振れ" },
+  { value: "standard", label: "標準", note: "10秒で最大振れ" },
+  { value: "slow", label: "ゆっくり", note: "14秒で最大振れ" },
 ];
 
 const OPPONENT_MODES: Array<{ value: OpponentMode; label: string; note: string }> = [
@@ -40,6 +51,9 @@ const getPatternLabel = (pattern: WindPattern) =>
 const getOpponentLabel = (mode: OpponentMode) =>
   OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "そのまま走る";
 
+const getTempoLabel = (tempo: WindTempo) =>
+  WIND_TEMPOS.find((option) => option.value === tempo)?.label ?? "標準";
+
 const normalizeDisplayNumber = (value: number) => Math.abs(value) < 0.05 ? 0 : value;
 
 const formatBoatDifference = (value: number) => {
@@ -60,22 +74,23 @@ const getExplanation = (
 ) => {
   const side = config.shiftAngle < 0 ? "左" : config.shiftAngle > 0 ? "右" : "左右どちらにも";
   const action = config.leg === "upwind" ? "タック" : "ジャイブ";
-  if (time <= 4) {
+  const timeline = getFreeWindTimeline(config);
+  if (time <= timeline.shiftStart) {
     return `まず${config.leverageBoatLengths}艇身の横の距離を確認。風が振れる前は、2艇の前後差はほぼありません。`;
   }
-  if (time < 10) {
+  if (time < timeline.peak) {
     if (config.shiftAngle === 0) {
       return "風向は平均のままです。風の助けがないとき、操作による艇速ロスが差へどう表れるかを見ます。";
     }
     return `${side}へ風が振れています。相手との差が${relativeGain >= 0 ? "プラス" : "マイナス"}へ動く速さを見ます。`;
   }
-  if (time <= 16) {
+  if (time <= timeline.returnStart) {
     return `振れは最大付近です。${action}するなら、艇速ロスと相手とのクロスを同時に見ます。`;
   }
   if (config.windPattern === "hold") {
     return `風は振れた位置に留まっています。${maneuverCount > 0 ? "操作後の位置関係" : "横の距離による差"}が残るか確認します。`;
   }
-  if (time < 30) {
+  if (time < timeline.returnEnd) {
     return "風が戻っています。横に離れたことで得た暫定ゲインが、残るか消えるかを追います。";
   }
   if (config.windPattern === "return-past") {
@@ -114,6 +129,113 @@ function ChoiceButtons<T extends string>({
   );
 }
 
+const getMarkResultLabel = (result: "reached" | "missed" | "timeout") => {
+  if (result === "reached") return "マーク到達";
+  if (result === "missed") return "マーク外";
+  return "時間切れ";
+};
+
+function ReplayTransport({
+  time,
+  endTime,
+  isPlaying,
+  speed,
+  onToggle,
+  onStep,
+  onSpeedChange,
+}: {
+  time: number;
+  endTime: number;
+  isPlaying: boolean;
+  speed: number;
+  onToggle: () => void;
+  onStep: (offset: number) => void;
+  onSpeedChange: (speed: number) => void;
+}) {
+  return (
+    <div className="free-replay-transport" aria-label="リプレイ操作">
+      <div className="free-replay-transport__time">
+        <span>REPLAY</span>
+        <strong>{time}<small> / {endTime}秒</small></strong>
+      </div>
+      <div className="free-replay-transport__buttons">
+        <button type="button" onClick={() => onStep(-1)} disabled={time <= 0} aria-label="1秒戻る">−1秒</button>
+        <button type="button" className="free-replay-transport__play" onClick={onToggle}>
+          {isPlaying ? "停止" : time >= endTime ? "最初から再生" : "再生"}
+        </button>
+        <button type="button" onClick={() => onStep(1)} disabled={time >= endTime} aria-label="1秒進む">+1秒</button>
+      </div>
+      <div className="free-replay-speed" aria-label="リプレイ速度">
+        <span>速度</span>
+        {[0.5, 1, 2].map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={speed === option ? "is-active" : ""}
+            aria-pressed={speed === option}
+            onClick={() => onSpeedChange(option)}
+          >
+            {option}×
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TimingLab({
+  analysis,
+  maneuverLabel,
+}: {
+  analysis: TimingAnalysis;
+  maneuverLabel: string;
+}) {
+  const currentTrial = analysis.trials.find((trial) => trial.offset === 0)!;
+  const bestTrial = analysis.trials.find((trial) => trial.offset === analysis.bestOffset)!;
+  const advice = analysis.bestOffset === 0
+    ? `前後4秒にずらした試走の中では、今回の${currentTrial.maneuverTime}秒が最もよい結果でした。`
+    : analysis.bestOffset < 0
+      ? `この3試走では、${bestTrial.maneuverTime}秒まで${maneuverLabel}を早めると結果が改善しました。`
+      : `この3試走では、${bestTrial.maneuverTime}秒まで待ってから${maneuverLabel}すると結果が改善しました。`;
+  const multipleManeuverNote = currentTrial.maneuverTimes.length > 1
+    ? " 2回目以降も操作間隔を保ったまま、全体を4秒ずらしています。"
+    : "";
+
+  return (
+    <section className="free-timing-lab" aria-labelledby="free-timing-heading">
+      <div className="section-kicker">TIMING LAB / 前後4秒を比べる</div>
+      <h3 id="free-timing-heading">最初の{maneuverLabel}は適切だった？</h3>
+      <p>{advice} マーク到達を優先し、外した場合はマークまでの距離、到達した場合は到達秒、その後に相手との差を比べています。{multipleManeuverNote}</p>
+      <div className="free-timing-ruler" role="table" aria-label={`${maneuverLabel}時刻の比較`}>
+        {analysis.trials.map((trial) => (
+          <div
+            key={trial.offset}
+            className={`free-timing-trial${trial.offset === 0 ? " is-current" : ""}${trial.offset === analysis.bestOffset ? " is-best" : ""}`}
+            role="row"
+          >
+            <span role="cell">
+              <small>{trial.offset === 0 ? "今回" : trial.offset < 0 ? "4秒早く" : "4秒遅く"}</small>
+              <strong>{trial.maneuverTime}秒</strong>
+            </span>
+            <span role="cell">
+              <small>マーク</small>
+              <strong>{getMarkResultLabel(trial.markResult)}</strong>
+              <em>{trial.markResult === "reached" ? `${trial.endTime}秒` : `残り${trial.markDistance.toFixed(1)}艇身`}</em>
+            </span>
+            <span role="cell">
+              <small>終了時の差</small>
+              <strong>{formatBoatDifference(trial.relativeGain)}</strong>
+            </span>
+            <span role="cell" className="free-timing-trial__best" aria-label={trial.offset === analysis.bestOffset ? "3試走の中で最良" : undefined}>
+              {trial.offset === analysis.bestOffset ? "BEST" : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function FreeWindStrip({
   config,
   time,
@@ -144,6 +266,7 @@ function FreeWindStrip({
       </div>
       <dl className="free-wind-strip__facts">
         <div><dt>レグ</dt><dd>{config.leg === "upwind" ? "上り" : "下り"}</dd></div>
+        <div><dt>風の変化</dt><dd>{getTempoLabel(config.windTempo)}</dd></div>
         <div><dt>横の距離</dt><dd>{config.leverageBoatLengths}艇身</dd></div>
         <div><dt>相手</dt><dd>{getOpponentLabel(config.opponentMode)}</dd></div>
       </dl>
@@ -195,7 +318,17 @@ function FreeSetup({
       </fieldset>
 
       <fieldset className="free-control-group">
-        <legend>3　その後の風</legend>
+        <legend>3　風の変化速度</legend>
+        <ChoiceButtons
+          name="風の変化速度"
+          options={WIND_TEMPOS}
+          value={config.windTempo}
+          onChange={(windTempo) => onChange({ ...config, windTempo })}
+        />
+      </fieldset>
+
+      <fieldset className="free-control-group">
+        <legend>4　その後の風</legend>
         <ChoiceButtons
           name="その後の風"
           options={WIND_PATTERNS}
@@ -205,7 +338,7 @@ function FreeSetup({
       </fieldset>
 
       <fieldset className="free-control-group">
-        <legend>4　最初の横の距離</legend>
+        <legend>5　最初の横の距離</legend>
         <div className="free-range-readout">
           <span>近い</span>
           <output htmlFor="free-leverage">{config.leverageBoatLengths}艇身</output>
@@ -224,7 +357,7 @@ function FreeSetup({
       </fieldset>
 
       <fieldset className="free-control-group">
-        <legend>5　相手の動き</legend>
+        <legend>6　相手の動き</legend>
         <ChoiceButtons
           name="相手の動き"
           options={OPPONENT_MODES}
@@ -250,6 +383,9 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const [activeConfig, setActiveConfig] = useState<FreeScenarioConfig>(DEFAULT_FREE_CONFIG);
   const [time, setTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [liveSpeed, setLiveSpeed] = useState(1);
+  const [isReplayPlaying, setIsReplayPlaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(1);
   const [userManeuverTimes, setUserManeuverTimes] = useState<number[]>([]);
   const replay = useMemo(
     () => runFreeScenario(activeConfig, userManeuverTimes),
@@ -257,9 +393,29 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   );
   const setupReplay = useMemo(() => runFreeScenario(draftConfig, []), [draftConfig]);
   const baseline = useMemo(() => runFreeScenario(activeConfig, []), [activeConfig]);
+  const timingAnalysis = useMemo(
+    () => analyzeFirstManeuverTiming(activeConfig, userManeuverTimes),
+    [activeConfig, userManeuverTimes],
+  );
+  const bestTimingReplay = useMemo(() => {
+    if (!timingAnalysis || timingAnalysis.bestOffset === 0) return null;
+    const bestTrial = timingAnalysis.trials.find((trial) => trial.offset === timingAnalysis.bestOffset)!;
+    return runFreeScenario(activeConfig, bestTrial.maneuverTimes);
+  }, [activeConfig, timingAnalysis]);
   const comparisons = useMemo<CourseComparison[]>(
-    () => phase === "replay" ? [{ replay: baseline, variant: "no-tack", label: "自艇操作なし" }] : [],
-    [baseline, phase],
+    () => phase === "replay"
+      ? [
+          { replay: baseline, variant: "no-tack", label: "自艇操作なし" } as CourseComparison,
+          ...(bestTimingReplay
+            ? [{
+                replay: bestTimingReplay,
+                variant: "coach" as const,
+                label: timingAnalysis?.bestOffset === -4 ? "4秒早い試走" : "4秒遅い試走",
+              }]
+            : []),
+        ]
+      : [],
+    [baseline, bestTimingReplay, phase, timingAnalysis?.bestOffset],
   );
 
   useEffect(() => {
@@ -268,15 +424,29 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
       setPhase("replay");
       return;
     }
-    const timer = window.setTimeout(() => setTime((current) => current + 1), 720);
+    const timer = window.setTimeout(() => setTime((current) => current + 1), 720 / liveSpeed);
     return () => window.clearTimeout(timer);
-  }, [isPaused, phase, replay.endTime, time]);
+  }, [isPaused, liveSpeed, phase, replay.endTime, time]);
+
+  useEffect(() => {
+    if (phase !== "replay" || !isReplayPlaying) return;
+    if (time >= replay.endTime) {
+      setIsReplayPlaying(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setTime((current) => Math.min(replay.endTime, current + 1)),
+      560 / replaySpeed,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isReplayPlaying, phase, replay.endTime, replaySpeed, time]);
 
   const start = (config = draftConfig) => {
     setActiveConfig({ ...config });
     setTime(0);
     setUserManeuverTimes([]);
     setIsPaused(false);
+    setIsReplayPlaying(false);
     setPhase("playing");
   };
 
@@ -289,6 +459,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const changeConditions = () => {
     setDraftConfig(activeConfig);
     setTime(0);
+    setIsReplayPlaying(false);
     setPhase("setup");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -298,11 +469,24 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const displayTime = phase === "setup" ? 0 : time;
   const currentFrame = displayReplay.frames[displayTime];
   const gain = currentFrame.relativeGain / BOAT_LENGTH_PX;
-  const choiceGain = replay.finalRelativeGain - baseline.finalRelativeGain;
+  const commonTimeComparison = getRelativeGainDifferenceAtCommonTime(replay, baseline);
+  const choiceGain = commonTimeComparison.difference;
   const maneuverLabel = activeConfig.leg === "upwind" ? "タック" : "ジャイブ";
   const lastManeuverTime = userManeuverTimes[userManeuverTimes.length - 1] ?? -10;
   const canManeuver = phase === "playing" && time >= 1 && time - lastManeuverTime >= 4;
   const windAngles = displayReplay.frames.map((frame) => frame.windAngle);
+  const toggleReplay = () => {
+    if (isReplayPlaying) {
+      setIsReplayPlaying(false);
+      return;
+    }
+    if (time >= replay.endTime) setTime(0);
+    setIsReplayPlaying(true);
+  };
+  const stepReplay = (offset: number) => {
+    setIsReplayPlaying(false);
+    setTime((current) => Math.min(replay.endTime, Math.max(0, current + offset)));
+  };
 
   return (
     <div className={`free-simulation free-simulation--${phase}`}>
@@ -362,6 +546,20 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
               <button type="button" className="secondary-action free-reset-action" onClick={() => start(activeConfig)}>
                 同じ条件で最初から
               </button>
+              <div className="free-live-speed" role="group" aria-label="シミュレーションの進行速度">
+                <span>進行速度</span>
+                {[1, 2, 4].map((speed) => (
+                  <button
+                    key={speed}
+                    type="button"
+                    className={liveSpeed === speed ? "is-active" : ""}
+                    aria-pressed={liveSpeed === speed}
+                    onClick={() => setLiveSpeed(speed)}
+                  >
+                    {speed}×
+                  </button>
+                ))}
+              </div>
             </section>
           ) : null}
 
@@ -381,7 +579,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <small>{replay.endTime}秒　｜　マークとの距離 {replay.markDistance.toFixed(1)}艇身</small>
               </div>
               <div className="free-result-number">
-                <span>自艇操作なしとの差</span>
+                <span>{commonTimeComparison.time}秒時点の<br />自艇操作なしとの差</span>
                 <strong className={choiceGain >= 0 ? "gain-positive" : "gain-negative"}>
                   {formatBoatDifference(choiceGain)}
                 </strong>
@@ -392,8 +590,8 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                   : Math.abs(choiceGain) < 0.3
                     ? "今回の操作では、自艇を操作しない場合とほぼ同じ結果でした。タイミングを前後へ動かして比べましょう。"
                   : choiceGain > 0
-                    ? `今回の${maneuverLabel}により、自艇を操作しない場合より前で終えました。艇速ロスを払っても残ったゲインです。`
-                    : `今回の${maneuverLabel}では、自艇を操作しない場合より後ろで終えました。風の戻りと艇速ロスを時間軸で確認します。`}
+                    ? `今回の${maneuverLabel}により、同じ時刻の操作なし航跡より前にいました。艇速ロスを払っても残ったゲインです。`
+                    : `今回の${maneuverLabel}では、同じ時刻の操作なし航跡より後ろでした。風の戻りと艇速ロスを時間軸で確認します。`}
               </p>
 
               <input
@@ -404,7 +602,19 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 step="1"
                 value={time}
                 aria-label="フリーシミュレーションのリプレイ時刻"
-                onChange={(event) => setTime(Number(event.target.value))}
+                onChange={(event) => {
+                  setIsReplayPlaying(false);
+                  setTime(Number(event.target.value));
+                }}
+              />
+              <ReplayTransport
+                time={time}
+                endTime={replay.endTime}
+                isPlaying={isReplayPlaying}
+                speed={replaySpeed}
+                onToggle={toggleReplay}
+                onStep={stepReplay}
+                onSpeedChange={setReplaySpeed}
               />
               <div className="event-strip" aria-label="重要な出来事">
                 {replay.events.map((event, index) => (
@@ -412,7 +622,10 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                     key={`${event.kind}-${event.time}-${index}`}
                     type="button"
                     className={time === event.time ? "event-chip event-chip--active" : "event-chip"}
-                    onClick={() => setTime(event.time)}
+                    onClick={() => {
+                      setIsReplayPlaying(false);
+                      setTime(event.time);
+                    }}
                   >
                     <span>{event.time}秒</span>{event.label}
                   </button>
@@ -428,6 +641,9 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <span className="coach-note__tape">この時点</span>
                 <p>{getExplanation(time, activeConfig, gain, userManeuverTimes.length)}</p>
               </div>
+              {timingAnalysis ? (
+                <TimingLab analysis={timingAnalysis} maneuverLabel={maneuverLabel} />
+              ) : null}
               <div className="free-replay-actions">
                 <button type="button" className="primary-action" onClick={() => start(activeConfig)}>同じ条件でもう一度</button>
                 <button type="button" className="secondary-action" onClick={changeConditions}>条件を変える</button>

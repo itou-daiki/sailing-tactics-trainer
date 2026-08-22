@@ -85,7 +85,7 @@ export const DEFAULT_FREE_CONFIG: FreeScenarioConfig = {
   windPattern: "return",
   windTempo: "standard",
   leverageBoatLengths: 12,
-  opponentMode: "fixed",
+  opponentMode: "hold",
 };
 
 const degreesToRadians = (degrees: number) => (degrees * Math.PI) / 180;
@@ -239,6 +239,71 @@ const getHeading = (tack: Tack, windAngle: number, leg: CourseLeg) => {
   return windAngle + (tack === "port" ? courseAngle : -courseAngle);
 };
 
+const getOppositeTack = (tack: Tack): Tack => tack === "port" ? "starboard" : "port";
+
+const hasReachedMarkLayline = (
+  position: Point,
+  tack: Tack,
+  windAngle: number,
+  leg: CourseLeg,
+  mark: Point,
+) => {
+  const heading = getHeading(getOppositeTack(tack), windAngle, leg);
+  const radians = degreesToRadians(heading);
+  const direction = { x: Math.sin(radians), y: Math.cos(radians) };
+  const toMark = { x: mark.x - position.x, y: mark.y - position.y };
+  const distanceAlongNewTack = toMark.x * direction.x + toMark.y * direction.y;
+  const crossTrackDistance = direction.x * toMark.y - direction.y * toMark.x;
+
+  return distanceAlongNewTack > MARK_REACH_RADIUS_PX
+    && Math.abs(crossTrackDistance) <= BOAT_LENGTH_PX;
+};
+
+const getVelocity = (speed: number, heading: number): Point => {
+  const radians = degreesToRadians(heading);
+  return { x: Math.sin(radians) * speed, y: Math.cos(radians) * speed };
+};
+
+const willMeetWithin = (
+  userPosition: Point,
+  opponentPosition: Point,
+  userSpeed: number,
+  opponentSpeed: number,
+  userHeading: number,
+  opponentHeading: number,
+  seconds: number,
+) => {
+  const userVelocity = getVelocity(userSpeed, userHeading);
+  const opponentVelocity = getVelocity(opponentSpeed, opponentHeading);
+  const relativePosition = {
+    x: opponentPosition.x - userPosition.x,
+    y: opponentPosition.y - userPosition.y,
+  };
+  const relativeVelocity = {
+    x: opponentVelocity.x - userVelocity.x,
+    y: opponentVelocity.y - userVelocity.y,
+  };
+  const relativeSpeedSquared = relativeVelocity.x ** 2 + relativeVelocity.y ** 2;
+  if (relativeSpeedSquared < 0.01) return false;
+
+  const closestTime = -(
+    relativePosition.x * relativeVelocity.x
+    + relativePosition.y * relativeVelocity.y
+  ) / relativeSpeedSquared;
+  if (closestTime < 0 || closestTime > seconds) return false;
+
+  const closestDistance = Math.hypot(
+    relativePosition.x + relativeVelocity.x * closestTime,
+    relativePosition.y + relativeVelocity.y * closestTime,
+  );
+  return closestDistance <= BOAT_LENGTH_PX * 2.2;
+};
+
+const getBearAwayHeading = (tack: Tack, windAngle: number, leg: CourseLeg) => {
+  const courseAngle = leg === "upwind" ? 75 : 165;
+  return windAngle + (tack === "port" ? courseAngle : -courseAngle);
+};
+
 const moveBoat = (position: Point, speed: number, heading: number): Point => {
   const radians = degreesToRadians(heading);
   return {
@@ -262,7 +327,10 @@ export function runFreeScenario(
   requestedUserManeuverTimes: number[],
 ): FreeScenarioReplay {
   const userManeuverTimes = normalizeManeuverTimes(requestedUserManeuverTimes);
-  const opponentManeuverTimes = getOpponentManeuverTimes(config, userManeuverTimes);
+  const scheduledOpponentManeuverTimes = getOpponentManeuverTimes(config, userManeuverTimes);
+  const opponentManeuverTimes: number[] = [];
+  const opponentLaylineTackTimes = new Set<number>();
+  const opponentAvoidanceTimes: number[] = [];
   const separation = clamp(config.leverageBoatLengths, 2, 22) * BOAT_LENGTH_PX;
   const initialY = config.leg === "upwind" ? 105 : 405;
   let userPosition: Point = { x: 275 + separation / 2, y: initialY };
@@ -270,6 +338,8 @@ export function runFreeScenario(
   const baseSpeed = config.leg === "upwind" ? 8.4 : 7.2;
   let userManeuverLoss = 0;
   let opponentManeuverLoss = 0;
+  let opponentAvoidUntil = -1;
+  let lastOpponentAvoidanceTime = -10;
   const frames: Frame[] = [];
   let markResult: MarkResult = "timeout";
   const mark = config.leg === "upwind" ? UPWIND_MARK : DOWNWIND_MARK;
@@ -278,11 +348,50 @@ export function runFreeScenario(
   for (let time = 0; time <= FREE_SCENARIO_MAX_DURATION; time += 1) {
     const windAngle = getFreeWindAngle(time, config);
     const userTack = getTack(time, userManeuverTimes);
+    const opponentTackBeforeManeuver = getTack(time, opponentManeuverTimes);
+    const lastOpponentManeuverTime = opponentManeuverTimes[opponentManeuverTimes.length - 1] ?? -10;
+    const scheduledManeuver = scheduledOpponentManeuverTimes.includes(time);
+    const laylineManeuver = time - lastOpponentManeuverTime >= 4
+      && hasReachedMarkLayline(
+        opponentPosition,
+        opponentTackBeforeManeuver,
+        windAngle,
+        config.leg,
+        mark,
+      );
+    if (scheduledManeuver || laylineManeuver) {
+      opponentManeuverTimes.push(time);
+      if (laylineManeuver) opponentLaylineTackTimes.add(time);
+    }
     const opponentTack = getTack(time, opponentManeuverTimes);
     const userSpeed = getSpeed(time, userManeuverTimes, config.leg);
     const opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
     const userHeading = getHeading(userTack, windAngle, config.leg);
-    const opponentHeading = getHeading(opponentTack, windAngle, config.leg);
+    const opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
+    // RRS 10 requires the port-tack boat to keep clear of a starboard-tack boat.
+    // This teaching model represents that obligation with one consistent action:
+    // the opponent bears away for three seconds to pass behind the user.
+    // Source: https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf
+    const isNewAvoidance = time - lastOpponentAvoidanceTime >= 6
+      && userTack === "starboard"
+      && opponentTack === "port"
+      && willMeetWithin(
+        userPosition,
+        opponentPosition,
+        userSpeed,
+        opponentSpeed,
+        userHeading,
+        opponentCourseHeading,
+        5,
+      );
+    if (isNewAvoidance) {
+      opponentAvoidUntil = time + 2;
+      lastOpponentAvoidanceTime = time;
+      opponentAvoidanceTimes.push(time);
+    }
+    const opponentHeading = time <= opponentAvoidUntil
+      ? getBearAwayHeading(opponentTack, windAngle, config.leg)
+      : opponentCourseHeading;
 
     frames.push({
       time,
@@ -344,7 +453,20 @@ export function runFreeScenario(
     events.push({ time, kind: "user-tack", label: `あなたが${maneuver}` });
   }
   for (const time of opponentManeuverTimes) {
-    events.push({ time, kind: "opponent-tack", label: `相手が${maneuver}` });
+    events.push({
+      time,
+      kind: "opponent-tack",
+      label: opponentLaylineTackTimes.has(time)
+        ? `相手がレイラインで${maneuver}`
+        : `相手が${maneuver}`,
+    });
+  }
+  for (const time of opponentAvoidanceTimes) {
+    events.push({
+      time,
+      kind: "avoid",
+      label: "相手が航路権艇を避けて下る",
+    });
   }
   const finalFrame = frames[frames.length - 1];
   events.push({

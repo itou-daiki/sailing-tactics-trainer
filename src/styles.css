@@ -309,6 +309,7 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-range-readout span:last-child { text-align: right; }
 .free-range-readout output { color: var(--ink); font: 800 1rem/1.2 "Arial Narrow", "BIZ UDPGothic", sans-serif; }
 .free-control-group input[type="range"] { width: 100%; min-height: 34px; margin: 0; accent-color: var(--signal); }
+.free-opponent-rule-note { margin: 10px 0 0; padding: 9px 10px; border-left: 4px solid var(--sea-deep); color: var(--graphite); background: rgba(215, 233, 234, .4); font-size: .64rem; line-height: 1.6; }
 .free-plan { position: relative; margin: 10px 0 0; padding: 18px 0; border: 0; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
 .free-plan legend { padding: 0 8px 0 0; font-size: .72rem; font-weight: 800; }
 .free-plan__tape { display: inline-block; margin: 2px 0 8px; padding: 5px 8px; color: var(--ink); background: var(--wind); font: 800 .59rem/1 "Arial Narrow", sans-serif; letter-spacing: .11em; transform: rotate(-1deg); }

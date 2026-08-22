@@ -35,6 +35,7 @@ export type EventKind =
   | "peak"
   | "user-tack"
   | "opponent-tack"
+  | "avoid"
   | "cross-window"
   | "return"
   | "mean"

@@ -21,7 +21,7 @@
 | [World Sailing Level 1 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel1TechnicalCourse324.05.13-%5B15060%5D.pdf) | 練習を `Plan – Do – Review` として組み、brief、実施、debriefをつなぐ | 操作前の予定時刻、実行時刻、リプレイを一続きにする |
 | [World Sailing Level 2 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel2TechnicalCourseSyllabus-%5B18133%5D.pdf) | 目的、学習成果、陸上ドリル、対話型理論、recap/debrief、映像資源を組み合わせる | 各プリセットに「何を見る練習か」を明記し、結果だけで終わらせない |
 | [International 420 Class online training resource](https://www.sailing.org/2015/05/05/international-420-class-launches-new-online-training-resource/) | 420向けExercise e-Bookは、選んだ練習を段階化し、目的、必要物、評価、動画・アニメーション、debrief notes、progress benchmarkをまとめている | 420専用ドリルと振り返り問いを製品の中心に置く |
-| [World Sailing Racing Rules](https://www.sailing.org/inside-world-sailing/rules-regulations/racingrules/) | 現行ルールは2025–2028版。Case Bookなど、事例で判断を学ぶ公式資料がある | 将来の航路権モードは現行ルールと公式事例を根拠に別モジュール化する |
+| [World Sailing Racing Rules](https://www.sailing.org/inside-world-sailing/rules-regulations/racingrules/) / [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | 現行ルールは2025–2028版。Rule 10では反対タックのときポート艇がスターボード艇を避ける。Case Bookなど、事例で判断を学ぶ公式資料もある | ミート時の回避義務を反映する。教材内ではポート艇の回避方法を3秒間のベアに統一し、実際には唯一の避け方ではないことを明記する |
 
 ## 類似サービス・ゲームの比較
 

@@ -63,6 +63,41 @@ describe("フリーシミュレーション", () => {
     expect(times).toEqual([9, 20]);
   });
 
+  it("相手はレイラインまで走ってから、マークへ向かうタックをする", () => {
+    const replay = runFreeScenario(config({
+      shiftAngle: 0,
+      windPattern: "hold",
+      opponentMode: "hold",
+    }), []);
+    const laylineTackTime = replay.opponentManeuverTimes[0];
+
+    expect(laylineTackTime).toBeGreaterThanOrEqual(32);
+    expect(laylineTackTime).toBeLessThanOrEqual(36);
+    expect(replay.frames[laylineTackTime - 1].opponent.tack).toBe("port");
+    expect(replay.frames[laylineTackTime].opponent.tack).toBe("starboard");
+    expect(replay.events).toContainEqual(expect.objectContaining({
+      time: laylineTackTime,
+      kind: "opponent-tack",
+      label: "相手がレイラインでタック",
+    }));
+  });
+
+  it("反対タックでミートし自艇がスターボードなら、相手が下って避ける", () => {
+    const replay = runFreeScenario(config({
+      shiftAngle: 0,
+      windPattern: "hold",
+      opponentMode: "hold",
+    }), [10]);
+    const avoidance = replay.events.find((event) => event.kind === "avoid");
+
+    expect(avoidance).toBeDefined();
+    const avoidanceFrame = replay.frames[avoidance!.time];
+    expect(avoidanceFrame.user.tack).toBe("starboard");
+    expect(avoidanceFrame.opponent.tack).toBe("port");
+    expect(avoidanceFrame.opponent.heading - avoidanceFrame.windAngle).toBeGreaterThan(60);
+    expect(avoidance?.label).toBe("相手が航路権艇を避けて下る");
+  });
+
   it("同じ時刻で操作ありと操作なしのゲイン差を比較する", () => {
     const active = runFreeScenario(config({ opponentMode: "hold" }), [10]);
     const baseline = runFreeScenario(config({ opponentMode: "hold" }), []);

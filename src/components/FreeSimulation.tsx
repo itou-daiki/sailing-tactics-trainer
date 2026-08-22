@@ -49,9 +49,9 @@ const WIND_TEMPOS: Array<{ value: WindTempo; label: string; note: string }> = [
 ];
 
 const OPPONENT_MODES: Array<{ value: OpponentMode; label: string; note: string }> = [
-  { value: "hold", label: "そのまま走る", note: "自艇の判断だけを比べる" },
-  { value: "fixed", label: "18秒で反応", note: "決まったタイミングで操作する" },
-  { value: "cover", label: "2秒後にカバー", note: "あなたの動きへ追従する" },
+  { value: "hold", label: "レイライン優先", note: "レイラインで必ず返す" },
+  { value: "fixed", label: "18秒で先に返す", note: "その後もレイラインを守る" },
+  { value: "cover", label: "2秒後にカバー", note: "追従後もレイラインを守る" },
 ];
 
 const LEG_OPTIONS: Array<{ value: CourseLeg; label: string; action: string }> = [
@@ -86,7 +86,7 @@ const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
       windPattern: "hold",
       windTempo: "quick",
       leverageBoatLengths: 12,
-      opponentMode: "fixed",
+      opponentMode: "hold",
     },
     planCue: "peak",
   },
@@ -116,7 +116,7 @@ const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
       windPattern: "return-past",
       windTempo: "standard",
       leverageBoatLengths: 16,
-      opponentMode: "fixed",
+      opponentMode: "hold",
     },
     planCue: "returnStart",
   },
@@ -158,7 +158,7 @@ const getPatternLabel = (pattern: WindPattern) =>
   WIND_PATTERNS.find((option) => option.value === pattern)?.label ?? "平均へ戻る";
 
 const getOpponentLabel = (mode: OpponentMode) =>
-  OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "そのまま走る";
+  OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "レイライン優先";
 
 const getTempoLabel = (tempo: WindTempo) =>
   WIND_TEMPOS.find((option) => option.value === tempo)?.label ?? "標準";
@@ -180,10 +180,14 @@ const getExplanation = (
   config: FreeScenarioConfig,
   relativeGain: number,
   maneuverCount: number,
+  opponentIsAvoiding = false,
 ) => {
   const side = config.shiftAngle < 0 ? "左" : config.shiftAngle > 0 ? "右" : "左右どちらにも";
   const action = config.leg === "upwind" ? "タック" : "ジャイブ";
   const timeline = getFreeWindTimeline(config);
+  if (opponentIsAvoiding) {
+    return `反対タックでミートします。自艇がスターボードの航路権艇なので、相手は${config.leg === "upwind" ? "ベアして" : "さらに下って"}自艇の後ろを通ります。`;
+  }
   if (time <= timeline.shiftStart) {
     return `まず${config.leverageBoatLengths}艇身の横の距離を確認。風が振れる前は、2艇の前後差はほぼありません。`;
   }
@@ -698,6 +702,9 @@ function FreeSetup({
           value={config.opponentMode}
           onChange={(opponentMode) => onChange({ ...config, opponentMode })}
         />
+        <p className="free-opponent-rule-note">
+          共通動作：相手はマークのレイラインで必ず返します。反対タックでミートし、自艇がスターボードなら、相手がベアして後ろを通ります。
+        </p>
       </fieldset>
 
       <ManeuverPlan
@@ -828,6 +835,16 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const lastManeuverTime = userManeuverTimes[userManeuverTimes.length - 1] ?? -10;
   const canManeuver = phase === "playing" && time >= 1 && time - lastManeuverTime >= 4;
   const windAngles = displayReplay.frames.map((frame) => frame.windAngle);
+  const opponentIsAvoiding = displayReplay.events.some((event) =>
+    event.kind === "avoid" && displayTime >= event.time && displayTime <= event.time + 2
+  );
+  const currentExplanation = getExplanation(
+    displayTime,
+    displayConfig,
+    gain,
+    userManeuverTimes.length,
+    opponentIsAvoiding,
+  );
   const toggleReplay = () => {
     if (isReplayPlaying) {
       setIsReplayPlaying(false);
@@ -866,7 +883,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
             <div className="action-dock free-action-dock">
               <div className="play-clock">
                 <strong>{time}</strong><span>秒</span>
-                <p>{isPaused ? "停止中。風向と相手との差を確認できます。" : getExplanation(time, activeConfig, gain, userManeuverTimes.length)}</p>
+                <p>{isPaused ? `停止中。${currentExplanation}` : currentExplanation}</p>
               </div>
               <button type="button" className="pause-action" onClick={() => setIsPaused((current) => !current)}>
                 {isPaused ? "再開" : "一時停止"}
@@ -896,12 +913,12 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
             <section className="free-watch" aria-labelledby="free-watch-heading">
               <div className="section-kicker">OBSERVE / 比べる</div>
               <h2 id="free-watch-heading">差が動く理由を探す。</h2>
-              <p>{getExplanation(time, activeConfig, gain, userManeuverTimes.length)}</p>
+              <p>{currentExplanation}</p>
               <dl className="free-live-data">
                 <div><dt>相手との差</dt><dd>{gain >= 0 ? "+" : ""}{gain.toFixed(1)}艇身</dd></div>
                 <div><dt>現在の横距離</dt><dd>{(currentFrame.leverage / BOAT_LENGTH_PX).toFixed(1)}艇身</dd></div>
                 <div><dt>操作回数</dt><dd>{userManeuverTimes.length}回</dd></div>
-                <div><dt>相手の操作</dt><dd>{replay.opponentManeuverTimes.filter((eventTime) => eventTime <= time).length}回</dd></div>
+                <div><dt>相手の状態</dt><dd>{opponentIsAvoiding ? "ベア中" : `${replay.opponentManeuverTimes.filter((eventTime) => eventTime <= time).length}回操作`}</dd></div>
                 <div><dt>最初の予定</dt><dd>{activePlannedTime}秒</dd></div>
                 <div><dt>最初の実行</dt><dd>{userManeuverTimes[0] === undefined ? "まだ" : `${userManeuverTimes[0]}秒`}</dd></div>
               </dl>
@@ -1007,7 +1024,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
               </dl>
               <div className="coach-note free-coach-note">
                 <span className="coach-note__tape">この時点</span>
-                <p>{getExplanation(time, activeConfig, gain, userManeuverTimes.length)}</p>
+                <p>{currentExplanation}</p>
               </div>
               {timingAnalysis ? (
                 <TimingLab analysis={timingAnalysis} maneuverLabel={maneuverLabel} />

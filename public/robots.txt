@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://itou-daiki.github.io/sailing-tactics-trainer/sitemap.xml

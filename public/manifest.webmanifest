@@ -1,0 +1,19 @@
+{
+  "name": "SHIFT｜420 TACTICS",
+  "short_name": "SHIFT 420",
+  "description": "420セーラーのための風の振れと相対ゲイン判断トレーナー",
+  "lang": "ja",
+  "start_url": "/sailing-tactics-trainer/",
+  "scope": "/sailing-tactics-trainer/",
+  "display": "standalone",
+  "background_color": "#f7f7f3",
+  "theme_color": "#f7f7f3",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

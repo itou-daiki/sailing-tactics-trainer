@@ -100,24 +100,56 @@ describe("フリーシミュレーション", () => {
     )).toBe(false);
   });
 
-  it("レイライン前のミートで自艇が前なら、相手は下って後ろを通る", () => {
+  it("右振れ後に自艇がタックした通常のミートでは、相手もミート前にタックする", () => {
     const replay = runFreeScenario(config({
       shiftAngle: 10,
       windPattern: "hold",
       opponentMode: "hold",
-    }), [10]);
+    }), [9]);
+    const meetingTack = replay.events.find((event) => event.label === "相手がミート前にタック");
+
+    expect(meetingTack).toBeDefined();
+    expect(meetingTack!.time).toBeGreaterThanOrEqual(9);
+    expect(meetingTack!.time).toBeLessThanOrEqual(12);
+    expect(replay.frames[meetingTack!.time].opponent.tack).toBe("starboard");
+    expect(replay.events.some((event) =>
+      event.kind === "avoid" && event.time <= meetingTack!.time
+    )).toBe(false);
+    expect(replay.opponentDecisions[0]).toMatchObject({
+      time: 10,
+      action: "tack",
+      secondsToMeeting: 12,
+      closestDistanceBoatLengths: 2,
+      maneuverRecoverySeconds: 4,
+      safetyMarginSeconds: 7,
+    });
+    expect(Object.values(replay.opponentDecisions[0].meetingPoint).every(Number.isFinite)).toBe(true);
+  });
+
+  it("タックを完了する安全余地がない近距離ミートでは、相手は下って後ろを通る", () => {
+    const replay = runFreeScenario(config({
+      shiftAngle: 10,
+      windPattern: "hold",
+      leverageBoatLengths: 4,
+      opponentMode: "hold",
+    }), [9]);
     const avoidance = replay.events.find((event) => event.kind === "avoid");
 
     expect(avoidance).toBeDefined();
     const avoidanceFrame = replay.frames[avoidance!.time];
-    expect(avoidanceFrame.relativeGain).toBeGreaterThan(0);
     expect(avoidanceFrame.user.tack).toBe("starboard");
     expect(avoidanceFrame.opponent.tack).toBe("port");
     expect(avoidanceFrame.opponent.heading - avoidanceFrame.windAngle).toBeGreaterThan(60);
-    expect(avoidance?.label).toBe("相手が航路権艇を避けて下る");
-    expect(replay.events.some((event) =>
-      event.label === "相手がミート前にタック" && event.time <= avoidance!.time
-    )).toBe(false);
+    expect(avoidance?.label).toBe("相手がタックできず、下って避ける");
+    expect(replay.opponentDecisions[0]).toMatchObject({
+      time: 9,
+      action: "duck",
+      secondsToMeeting: 4,
+      closestDistanceBoatLengths: 1.4,
+      maneuverRecoverySeconds: 4,
+      safetyMarginSeconds: -1,
+    });
+    expect(Object.values(replay.opponentDecisions[0].meetingPoint).every(Number.isFinite)).toBe(true);
   });
 
   it("同じ時刻で操作ありと操作なしのゲイン差を比較する", () => {
@@ -197,6 +229,32 @@ describe("フリーシミュレーション", () => {
         }
       }
     }
+  });
+
+  it("風・艇間距離・相手モードが変わっても、相手は4秒未満で連続操作しない", () => {
+    const failures: string[] = [];
+    for (const shiftAngle of [-18, -10, 0, 10, 18]) {
+      for (const leverageBoatLengths of [4, 8, 12, 16, 20]) {
+        for (const opponentMode of ["hold", "fixed", "cover"] as const) {
+          for (const userManeuverTime of [5, 9, 15, 25]) {
+            const replay = runFreeScenario(config({
+              shiftAngle,
+              windPattern: "hold",
+              leverageBoatLengths,
+              opponentMode,
+            }), [userManeuverTime]);
+            const hasRapidRepeat = replay.opponentManeuverTimes.some((time, index, times) =>
+              index > 0 && time - times[index - 1] < 4
+            );
+            if (hasRapidRepeat) {
+              failures.push(`${shiftAngle}/${leverageBoatLengths}/${opponentMode}/${userManeuverTime}`);
+            }
+          }
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
   });
 
   it("海面設定を共有URL用のクエリへ変換し、同じ設定へ戻せる", () => {

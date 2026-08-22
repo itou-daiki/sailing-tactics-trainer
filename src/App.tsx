@@ -130,7 +130,7 @@ export default function App() {
 
         <footer className="site-footer">
           <div className="site-footer__notes">
-            <p>420教育用モデル v0.2　｜　1艇身 = 4.2m</p>
+            <p>420教育用モデル v0.3　｜　1艇身 = 4.2m</p>
             <p>判断の練習用です。実際の海面では波・潮・艇速差も考えます。</p>
           </div>
           <p className="site-credit">Created by Dit-Lab.</p>

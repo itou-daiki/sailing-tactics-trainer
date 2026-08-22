@@ -20,6 +20,10 @@ interface CourseBoardProps {
   replay: TrackReplay;
   comparisons?: CourseComparison[];
   leg?: "upwind" | "downwind";
+  meetingForecast?: {
+    point: Point;
+    seconds: number;
+  };
 }
 
 const screenPoint = (point: Point) => ({
@@ -65,12 +69,14 @@ export function CourseBoard({
   replay,
   comparisons = [],
   leg = "upwind",
+  meetingForecast,
 }: CourseBoardProps) {
   const userPosition = screenPoint(frame.user);
   const opponentPosition = screenPoint(frame.opponent);
   const gain = frame.relativeGain / BOAT_LENGTH_PX;
   const markDistance = getMarkDistance(frame.user, leg) / BOAT_LENGTH_PX;
   const isAtMark = markDistance <= MARK_REACH_RADIUS_PX / BOAT_LENGTH_PX;
+  const meetingForecastPoint = meetingForecast ? screenPoint(meetingForecast.point) : null;
 
   return (
     <section className={isAtMark ? "course-board course-board--at-mark" : "course-board"} aria-label="コース上の自艇と相手艇">
@@ -87,6 +93,7 @@ export function CourseBoard({
         <title id="course-title">420二艇の航跡とラダーラング</title>
         <desc id="course-desc">
           オレンジが自艇、紺色が相手艇です。横線は現在の風向に合わせて回転します。
+          {meetingForecast ? `破線は約${meetingForecast.seconds}秒先の予測ミート点です。` : ""}
         </desc>
         <defs>
           <pattern id="chart-grid" width="28" height="28" patternUnits="userSpaceOnUse">
@@ -139,6 +146,17 @@ export function CourseBoard({
 
         <polyline className="track track--opponent" points={replay.frames.slice(0, frame.time + 1).map((item) => screenPoint(item.opponent)).map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")} />
         <polyline className="track track--user" points={polylinePoints(replay, frame.time)} />
+
+        {meetingForecast && meetingForecastPoint ? (
+          <g className="meeting-forecast" aria-label={`約${meetingForecast.seconds}秒先の予測ミート点`}>
+            <line x1={userPosition.x} y1={userPosition.y} x2={meetingForecastPoint.x} y2={meetingForecastPoint.y} />
+            <line x1={opponentPosition.x} y1={opponentPosition.y} x2={meetingForecastPoint.x} y2={meetingForecastPoint.y} />
+            <circle cx={meetingForecastPoint.x} cy={meetingForecastPoint.y} r="15" />
+            <path d={`M ${meetingForecastPoint.x - 6} ${meetingForecastPoint.y - 6} L ${meetingForecastPoint.x + 6} ${meetingForecastPoint.y + 6} M ${meetingForecastPoint.x + 6} ${meetingForecastPoint.y - 6} L ${meetingForecastPoint.x - 6} ${meetingForecastPoint.y + 6}`} />
+            <text x={meetingForecastPoint.x + 20} y={meetingForecastPoint.y - 8}>予測ミート</text>
+            <text x={meetingForecastPoint.x + 20} y={meetingForecastPoint.y + 5}>約{meetingForecast.seconds}秒先</text>
+          </g>
+        ) : null}
 
         <line
           className="relative-gain-line"

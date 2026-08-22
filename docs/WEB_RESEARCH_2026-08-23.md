@@ -21,7 +21,10 @@
 | [World Sailing Level 1 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel1TechnicalCourse324.05.13-%5B15060%5D.pdf) | 練習を `Plan – Do – Review` として組み、brief、実施、debriefをつなぐ | 操作前の予定時刻、実行時刻、リプレイを一続きにする |
 | [World Sailing Level 2 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel2TechnicalCourseSyllabus-%5B18133%5D.pdf) | 目的、学習成果、陸上ドリル、対話型理論、recap/debrief、映像資源を組み合わせる | 各プリセットに「何を見る練習か」を明記し、結果だけで終わらせない |
 | [International 420 Class online training resource](https://www.sailing.org/2015/05/05/international-420-class-launches-new-online-training-resource/) | 420向けExercise e-Bookは、選んだ練習を段階化し、目的、必要物、評価、動画・アニメーション、debrief notes、progress benchmarkをまとめている | 420専用ドリルと振り返り問いを製品の中心に置く |
-| [World Sailing Racing Rules](https://www.sailing.org/inside-world-sailing/rules-regulations/racingrules/) / [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | 現行ルールは2025–2028版。Rule 10では反対タックのときポート艇がスターボード艇を避ける。Case Bookなど、事例で判断を学ぶ公式資料もある | ミート時の回避義務を反映する。教材内ではレイライン前のミートはタックを優先し、自艇に前後のゲインがある場合だけ3秒間のベアで表す。これは規則上唯一の避け方ではないことを明記する |
+| [World Sailing Racing Rules](https://www.sailing.org/inside-world-sailing/rules-regulations/racingrules/) / [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | 現行ルールは2025–2028版。Rule 10ではポート艇がスターボード艇を避け、Rule 13ではタック中の艇がクローズホールドになるまで他艇を避け続ける | 「前後ゲインがプラスならベア」とは解釈しない。ミートを早期予測し、タック中も避けられる時間があれば先にタック、安全余地がない場合だけベアする |
+| [US Sailing Match Racing Quiz — Black Diamond](https://www.ussailing.org/wp-content/uploads/2021/07/Match-Racing-Quiz-Black-Diamond-July-2021-Answers.pdf) | 反対タックで収束する場面について、相手のラインへ達する直前のタックや、相手の反応を見越した早い判断を具体例で扱う | ミート地点で反応するAIではなく、収束を予測して数秒前に判断するAIにする |
+| [North U: Upwind Tactics One on One](https://www.northsails.com/en-us/blogs/north-sails-blog/north-u-upwind-tactics-one-on-one-bill-gladstone) | レイライン付近の1対1でも、lee-bow、cross & tack、継続、delayed tackという複数の選択肢がある | 単一の「正解」を規則から演繹しない。今回は初心者向け基本反応を実装し、発展戦術は別ドリルに分ける |
+| [Sailing World: Controlling the Cross](https://www.sailingworld.com/how-to/controlling-the-cross/) | ポート艇にはcross、duck、lee-bowがあり、ダックは右側へ進み続けたい戦略では有効だが距離を失う。遅い判断はリスクを上げる | ベアを「前にいるから」ではなく、「タックを安全に完了する時間が残らない」近距離の回避として扱う |
 
 ## 類似サービス・ゲームの比較
 
@@ -35,6 +38,9 @@
 | [SailingMetrics](https://sailingmetrics.com/) | 複数選手のGPS重ね合わせ、タック／ジャイブ分析、速度ヒートマップ | 実艇ログ連携は後段とし、現在は判断の因果を単純な教育モデルで見せる |
 | [RegaTTac](https://regattac.com/) | コーチがシナリオを組み、GPS、動画、マーク、リプレイを一つの画面で扱う | まずURLだけで配れる再現可能な海面を完成させる |
 | [F1 22 Time Trial](https://www.ea.com/able/resources/f1-22/steam/time-trial) | 自己ベストやライバルのゴーストと、同条件で反復比較できる | 操作なし、今回、前後4秒の仮想試走を同じ海面のゴーストとして重ねる |
+| [SAILSHIFT](https://xgl100.itch.io/sailshift) | 複数の風の振れと、自動／手動の相手艇を切り替え、タック時刻で2艇を競わせる | 相手AIを単なる固定時刻ではなく、風・艇間距離・予測ミートに反応させる |
+| [ABC Tools Sailing & Tacking Simulator](https://abc.tools/sim/sailing-simulator/) | 風の場、ポーラ、VMG、レイライン、最適ルーターとの比較をブラウザ内で表示する | 物理量を増やすだけでなく、「どの情報から判断したか」をリプレイで言葉にする点を差別化にする |
+| [Tactical Sailing Simulator](https://tss.boats/) | コーチと選手が同じ端末で前進／タックを選び、保存した試走を後から分析できる | スマホ1台で声に出して判断し、URL共有とリプレイでチームの対話につなげる |
 
 ## 学習科学から得た設計判断
 
@@ -44,6 +50,21 @@
 | [Retrieval Practice summary](https://www.retrievalpractice.org/summary) | 低リスクの想起、説明的フィードバック、メタ認知を組み合わせる | 走る前の予定を外化し、終わった後にその変更理由を問う |
 | [Prediction before feedback study](https://pubmed.ncbi.nlm.nih.gov/34634998/) | 内容を見る前に予測を試みた条件で、読むだけより保持が向上した研究 | リプレイ前ではなく、スタート前に最初の操作時刻を決める |
 | [Self-explanation and worked examples review](https://pmc.ncbi.nlm.nih.gov/articles/PMC8379662/) | 自己説明は概念の統合や転移を支えうるが、複雑すぎる例には適切な促しが必要 | 「何を見て予定を変えたか」を風・相手・マークの3候補に絞る |
+| [Feedback and motor-skill learning in physical education](https://pubmed.ncbi.nlm.nih.gov/34200657/) | 23研究のレビューで、フィードバックはフィードバックなしより生徒の運動技能学習に有効という強い証拠が示された | 結果だけでなく、ミート予測・必要時間・安全余裕という過程フィードバックを直後のリプレイに出す |
+
+## バイアス監査
+
+### 今回取り除いた仮定
+
+- 誤り: 自艇の前後ゲインがプラスなら、ポート艇はタックせずベアする。
+- 根拠不足だった理由: RRSは回避義務とタック中の義務を定めるが、前後ゲインを行動選択の閾値にはしていない。戦術資料も、ダックをコース戦略と安全余地を含む選択肢として扱う。
+- 修正: 反対タックの航跡から最接近時刻と距離を予測し、教材上のタック回復4秒＋安全1秒を確保できれば早めにタックする。5秒未満だけベアする。
+
+### まだ検証が必要な仮定
+
+- 12秒の予測範囲、4秒のタック回復、1秒の安全余裕は、420の公式ポーラや実測研究から得た値ではない。
+- 現段階では判断の因果を見やすくする教育用パラメータであり、420選手・コーチによる実艇データとシナリオ評価で校正する。
+- ダック、lee-bow、cross & tackの選択は風の戦略、艇速差、波、潮、フリート位置で変わる。基本AIにすべてを混ぜず、発展ドリルとして段階的に追加する。
 
 ## 実装した優先事項
 
@@ -52,6 +73,8 @@
 3. リプレイで `PLAN → DO → REVIEW` を表示し、予定どおりかと戦術的に有利かを分ける。
 4. 風、レグ、振れ戻り、速度、艇間距離、相手の反応をURLへ保存し、登録なしで共有する。
 5. Web Shareが使えない端末ではClipboard、さらに失敗した場合は手動コピーへ段階的に戻す。
+6. 相手艇はミートを12秒先まで予測し、安全にタックを完了できる場合はミート前にタックする。
+7. リプレイに「MEET CHECK」を置き、予測秒数と安全余裕から相手の判断を自己説明する。
 
 ## 独自ポジション
 

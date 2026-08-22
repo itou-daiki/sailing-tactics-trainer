@@ -12,6 +12,7 @@ import {
   serializeFreeScenarioConfig,
   type CourseLeg,
   type FreeScenarioConfig,
+  type OpponentDecision,
   type OpponentMode,
   type TimingAnalysis,
   type WindPattern,
@@ -49,7 +50,7 @@ const WIND_TEMPOS: Array<{ value: WindTempo; label: string; note: string }> = [
 ];
 
 const OPPONENT_MODES: Array<{ value: OpponentMode; label: string; note: string }> = [
-  { value: "hold", label: "レイライン判断", note: "ミートならタック、前ならベア" },
+  { value: "hold", label: "ミート先読み", note: "余裕があれば先にタック" },
   { value: "fixed", label: "18秒で先に返す", note: "その後もレイラインを守る" },
   { value: "cover", label: "2秒後にカバー", note: "追従後もレイラインを守る" },
 ];
@@ -158,7 +159,7 @@ const getPatternLabel = (pattern: WindPattern) =>
   WIND_PATTERNS.find((option) => option.value === pattern)?.label ?? "平均へ戻る";
 
 const getOpponentLabel = (mode: OpponentMode) =>
-  OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "レイライン判断";
+  OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "ミート先読み";
 
 const getTempoLabel = (tempo: WindTempo) =>
   WIND_TEMPOS.find((option) => option.value === tempo)?.label ?? "標準";
@@ -182,15 +183,16 @@ const getExplanation = (
   maneuverCount: number,
   opponentIsAvoiding = false,
   opponentTackedAtMeeting = false,
+  opponentDecision?: OpponentDecision,
 ) => {
   const side = config.shiftAngle < 0 ? "左" : config.shiftAngle > 0 ? "右" : "左右どちらにも";
   const action = config.leg === "upwind" ? "タック" : "ジャイブ";
   const timeline = getFreeWindTimeline(config);
   if (opponentTackedAtMeeting) {
-    return "まだレイライン前です。自艇が後ろなので、相手はミート前にタックしてレイライン側へ返します。";
+    return `まだレイライン前です。相手はミートを約${opponentDecision?.secondsToMeeting ?? "数"}秒前に予測し、安全に完了できるうちにタックします。`;
   }
   if (opponentIsAvoiding) {
-    return `自艇はスターボードで、前後のゲインもあります。相手は前へタックできないため、${config.leg === "upwind" ? "ベアして" : "さらに下って"}自艇の後ろを通ります。`;
+    return `ミートまで約${opponentDecision?.secondsToMeeting ?? "数"}秒。相手は今からタックすると安全余地がないため、${config.leg === "upwind" ? "ベアして" : "さらに下って"}自艇の後ろを通ります。`;
   }
   if (time <= timeline.shiftStart) {
     return `まず${config.leverageBoatLengths}艇身の横の距離を確認。風が振れる前は、2艇の前後差はほぼありません。`;
@@ -560,6 +562,55 @@ function TimingLab({
   );
 }
 
+function OpponentDecisionReview({
+  decision,
+  maneuverLabel,
+}: {
+  decision: OpponentDecision;
+  maneuverLabel: string;
+}) {
+  const canTackSafely = decision.action === "tack";
+  const requiredSeconds = decision.maneuverRecoverySeconds + 1;
+  const actionLabel = canTackSafely ? `先に${maneuverLabel}` : "下って回避";
+  const marginLabel = decision.safetyMarginSeconds >= 0
+    ? `+${decision.safetyMarginSeconds}秒`
+    : `${decision.safetyMarginSeconds}秒`;
+  const reason = canTackSafely
+    ? `この教材の${maneuverLabel}回復${decision.maneuverRecoverySeconds}秒と安全余裕1秒を確保できます。相手はミート地点まで待たず、レイライン前で${maneuverLabel}します。`
+    : `この教材で必要な${requiredSeconds}秒に足りません。ここで${maneuverLabel}すると、操作中も避ける余地がなくなるため、相手は下って後ろを通ります。`;
+
+  return (
+    <section className={`free-meet-check free-meet-check--${decision.action}`} aria-labelledby="free-meet-check-heading">
+      <div className="section-kicker">MEET CHECK / 相手は何を見た？</div>
+      <div className="free-meet-check__heading">
+        <h3 id="free-meet-check-heading">{decision.secondsToMeeting}秒前に、{actionLabel}。</h3>
+        <span>{decision.time}秒の判断</span>
+      </div>
+      <div className="free-meet-check__ruler" aria-label={`ミートまで${decision.secondsToMeeting}秒、タックに必要な時間${requiredSeconds}秒`}>
+        <div>
+          <small>予測したミート</small>
+          <strong>あと{decision.secondsToMeeting}秒</strong>
+        </div>
+        <i aria-hidden="true">−</i>
+        <div>
+          <small>教材基準：回復{decision.maneuverRecoverySeconds}秒＋安全1秒</small>
+          <strong>必要{requiredSeconds}秒</strong>
+        </div>
+        <b className={decision.safetyMarginSeconds >= 0 ? "is-safe" : "is-late"}>{marginLabel}</b>
+      </div>
+      <p>{reason}</p>
+      <dl className="free-meet-check__facts">
+        <div><dt>すれ違い予測</dt><dd>{decision.closestDistanceBoatLengths.toFixed(1)}艇身</dd></div>
+        <div><dt>判断の順番</dt><dd>反対タック → 秒数 → 余地</dd></div>
+      </dl>
+      <div className="free-meet-check__question">
+        <strong>自分なら何をコールする？</strong>
+        <span>「ミートまで○秒、タックできる／もう下る」を声に出してからリプレイを進めます。</span>
+      </div>
+    </section>
+  );
+}
+
 function FreeWindStrip({
   config,
   time,
@@ -707,7 +758,7 @@ function FreeSetup({
           onChange={(opponentMode) => onChange({ ...config, opponentMode })}
         />
         <p className="free-opponent-rule-note">
-          共通動作：レイライン前のミートでは、相手はまずタックしてレイライン側へ返します。ただし、自艇が前にいるときはベアして後ろを通ります。ミートがなければレイラインで返します。
+          共通動作：相手は12秒先までミートを見ます。この教材の回復時間（上り4秒／下り3秒）＋安全1秒があれば先に操作。間に合わないときだけ下って後ろを通ります。ミートがなければレイラインで返します。
         </p>
       </fieldset>
 
@@ -847,6 +898,16 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
       && event.label.includes("ミート前")
       && displayTime === event.time
   );
+  const currentOpponentDecision = displayReplay.opponentDecisions.find((decision) =>
+    displayTime >= decision.time
+      && displayTime <= decision.time + (decision.action === "duck" ? 2 : 0)
+  );
+  const replayOpponentDecision = [...replay.opponentDecisions]
+    .reverse()
+    .find((decision) => decision.time <= time) ?? replay.opponentDecisions[0];
+  const meetingForecast = displayReplay.opponentDecisions.find((decision) =>
+    decision.time === displayTime
+  );
   const currentExplanation = getExplanation(
     displayTime,
     displayConfig,
@@ -854,6 +915,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     userManeuverTimes.length,
     opponentIsAvoiding,
     opponentTackedAtMeeting,
+    currentOpponentDecision,
   );
   const toggleReplay = () => {
     if (isReplayPlaying) {
@@ -887,6 +949,10 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
             replay={displayReplay}
             comparisons={comparisons}
             leg={displayConfig.leg}
+            meetingForecast={meetingForecast ? {
+              point: meetingForecast.meetingPoint,
+              seconds: meetingForecast.secondsToMeeting,
+            } : undefined}
           />
 
           {phase === "playing" ? (
@@ -1026,6 +1092,12 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                   </button>
                 ))}
               </div>
+              {replayOpponentDecision ? (
+                <OpponentDecisionReview
+                  decision={replayOpponentDecision}
+                  maneuverLabel={maneuverLabel}
+                />
+              ) : null}
               <dl className="free-live-data free-live-data--replay">
                 <div><dt>現在の差</dt><dd>{formatBoatDifference(gain)}</dd></div>
                 <div><dt>最も有利</dt><dd>{formatBoatDifference(replay.maxRelativeGain)}</dd></div>

@@ -43,6 +43,17 @@ export interface FreeScenarioReplay {
   endTime: number;
   markResult: MarkResult;
   markDistance: number;
+  opponentDecisions: OpponentDecision[];
+}
+
+export interface OpponentDecision {
+  time: number;
+  action: "tack" | "duck";
+  secondsToMeeting: number;
+  closestDistanceBoatLengths: number;
+  maneuverRecoverySeconds: number;
+  safetyMarginSeconds: number;
+  meetingPoint: Point;
 }
 
 export interface FreeWindTimeline {
@@ -264,7 +275,35 @@ const getVelocity = (speed: number, heading: number): Point => {
   return { x: Math.sin(radians) * speed, y: Math.cos(radians) * speed };
 };
 
-const willMeetWithin = (
+interface MeetingPrediction {
+  secondsToClosestApproach: number;
+  closestDistance: number;
+  meetingPoint: Point;
+}
+
+const MANEUVER_SAFETY_MARGIN_SECONDS = 1;
+
+const makeOpponentDecision = (
+  time: number,
+  action: OpponentDecision["action"],
+  prediction: MeetingPrediction,
+  maneuverRecoverySeconds: number,
+): OpponentDecision => {
+  const secondsToMeeting = Math.round(prediction.secondsToClosestApproach);
+  return {
+    time,
+    action,
+    secondsToMeeting,
+    closestDistanceBoatLengths: Number((prediction.closestDistance / BOAT_LENGTH_PX).toFixed(1)),
+    maneuverRecoverySeconds,
+    safetyMarginSeconds: secondsToMeeting
+      - maneuverRecoverySeconds
+      - MANEUVER_SAFETY_MARGIN_SECONDS,
+    meetingPoint: prediction.meetingPoint,
+  };
+};
+
+const getMeetingPrediction = (
   userPosition: Point,
   opponentPosition: Point,
   userSpeed: number,
@@ -272,7 +311,7 @@ const willMeetWithin = (
   userHeading: number,
   opponentHeading: number,
   seconds: number,
-) => {
+): MeetingPrediction | null => {
   const userVelocity = getVelocity(userSpeed, userHeading);
   const opponentVelocity = getVelocity(opponentSpeed, opponentHeading);
   const relativePosition = {
@@ -284,19 +323,36 @@ const willMeetWithin = (
     y: opponentVelocity.y - userVelocity.y,
   };
   const relativeSpeedSquared = relativeVelocity.x ** 2 + relativeVelocity.y ** 2;
-  if (relativeSpeedSquared < 0.01) return false;
+  if (relativeSpeedSquared < 0.01) return null;
 
   const closestTime = -(
     relativePosition.x * relativeVelocity.x
     + relativePosition.y * relativeVelocity.y
   ) / relativeSpeedSquared;
-  if (closestTime < 0 || closestTime > seconds) return false;
+  if (closestTime < 0 || closestTime > seconds) return null;
 
   const closestDistance = Math.hypot(
     relativePosition.x + relativeVelocity.x * closestTime,
     relativePosition.y + relativeVelocity.y * closestTime,
   );
-  return closestDistance <= BOAT_LENGTH_PX * 2.2;
+  const userClosestPoint = {
+    x: userPosition.x + userVelocity.x * closestTime,
+    y: userPosition.y + userVelocity.y * closestTime,
+  };
+  const opponentClosestPoint = {
+    x: opponentPosition.x + opponentVelocity.x * closestTime,
+    y: opponentPosition.y + opponentVelocity.y * closestTime,
+  };
+  return closestDistance <= BOAT_LENGTH_PX * 2.2
+    ? {
+      secondsToClosestApproach: closestTime,
+      closestDistance,
+      meetingPoint: {
+        x: (userClosestPoint.x + opponentClosestPoint.x) / 2,
+        y: (userClosestPoint.y + opponentClosestPoint.y) / 2,
+      },
+    }
+    : null;
 };
 
 const getBearAwayHeading = (tack: Tack, windAngle: number, leg: CourseLeg) => {
@@ -332,11 +388,14 @@ export function runFreeScenario(
   const opponentLaylineTackTimes = new Set<number>();
   const opponentMeetingTackTimes = new Set<number>();
   const opponentAvoidanceTimes: number[] = [];
+  const opponentDecisions: OpponentDecision[] = [];
   const separation = clamp(config.leverageBoatLengths, 2, 22) * BOAT_LENGTH_PX;
   const initialY = config.leg === "upwind" ? 105 : 405;
   let userPosition: Point = { x: 275 + separation / 2, y: initialY };
   let opponentPosition: Point = { x: 275 - separation / 2, y: initialY };
   const baseSpeed = config.leg === "upwind" ? 8.4 : 7.2;
+  const maneuverRecoverySeconds = config.leg === "upwind" ? 4 : 3;
+  const safeManeuverLeadSeconds = maneuverRecoverySeconds + MANEUVER_SAFETY_MARGIN_SECONDS;
   let userManeuverLoss = 0;
   let opponentManeuverLoss = 0;
   let opponentAvoidUntil = -1;
@@ -351,7 +410,8 @@ export function runFreeScenario(
     const userTack = getTack(time, userManeuverTimes);
     const opponentTackBeforeManeuver = getTack(time, opponentManeuverTimes);
     const lastOpponentManeuverTime = opponentManeuverTimes[opponentManeuverTimes.length - 1] ?? -10;
-    const scheduledManeuver = scheduledOpponentManeuverTimes.includes(time);
+    const scheduledManeuver = time - lastOpponentManeuverTime >= maneuverRecoverySeconds
+      && scheduledOpponentManeuverTimes.includes(time);
     const laylineManeuver = time - lastOpponentManeuverTime >= 4
       && hasReachedMarkLayline(
         opponentPosition,
@@ -369,45 +429,54 @@ export function runFreeScenario(
     let opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
     const userHeading = getHeading(userTack, windAngle, config.leg);
     let opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
-    // RRS 10 requires the port-tack boat to keep clear of a starboard-tack boat.
-    // Before the layline, this model normally has the opponent tack away from a
-    // meeting. If the user already has positive relative gain, the opponent bears
-    // away for three seconds and passes behind instead.
+    // RRS 10 requires the port-tack boat to keep clear. Under RRS 13, a boat that
+    // has passed head to wind must also keep clear until she is close-hauled. The
+    // model therefore acts early only when the predicted crossing leaves the
+    // educational maneuver-recovery window plus one second of safety margin.
+    // The downwind gybe window is a teaching-model assumption, not a Rule 13 rule.
     // Source: https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf
-    const willMeet = userTack === "starboard"
+    const meetingPrediction = userTack === "starboard"
       && opponentTack === "port"
-      && willMeetWithin(
+      ? getMeetingPrediction(
         userPosition,
         opponentPosition,
         userSpeed,
         opponentSpeed,
         userHeading,
         opponentCourseHeading,
-        5,
-      );
-    const userHasMeetingAdvantage = getLegRelativeGain(
-      userPosition,
-      opponentPosition,
-      windAngle,
-      config.leg,
-    ) > 0;
+        12,
+      )
+      : null;
     const canTackForMeeting = !scheduledManeuver
       && !laylineManeuver
-      && time - lastOpponentManeuverTime >= 4;
-    if (willMeet && !userHasMeetingAdvantage && canTackForMeeting) {
+      && time - lastOpponentManeuverTime >= 4
+      && (meetingPrediction?.secondsToClosestApproach ?? 0) >= safeManeuverLeadSeconds;
+    if (meetingPrediction && canTackForMeeting) {
       opponentManeuverTimes.push(time);
       opponentMeetingTackTimes.add(time);
+      opponentDecisions.push(makeOpponentDecision(
+        time,
+        "tack",
+        meetingPrediction,
+        maneuverRecoverySeconds,
+      ));
       opponentTack = getTack(time, opponentManeuverTimes);
       opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
       opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
     }
-    const isNewAvoidance = willMeet
-      && (userHasMeetingAdvantage || !canTackForMeeting)
+    const isNewAvoidance = meetingPrediction
+      && !canTackForMeeting
       && time - lastOpponentAvoidanceTime >= 6;
     if (isNewAvoidance) {
       opponentAvoidUntil = time + 2;
       lastOpponentAvoidanceTime = time;
       opponentAvoidanceTimes.push(time);
+      opponentDecisions.push(makeOpponentDecision(
+        time,
+        "duck",
+        meetingPrediction,
+        maneuverRecoverySeconds,
+      ));
     }
     const opponentHeading = time <= opponentAvoidUntil
       ? getBearAwayHeading(opponentTack, windAngle, config.leg)
@@ -487,7 +556,7 @@ export function runFreeScenario(
     events.push({
       time,
       kind: "avoid",
-      label: "相手が航路権艇を避けて下る",
+      label: "相手がタックできず、下って避ける",
     });
   }
   const finalFrame = frames[frames.length - 1];
@@ -520,6 +589,7 @@ export function runFreeScenario(
     endTime: finalFrame.time,
     markResult,
     markDistance: getMarkDistance(finalFrame.user, config.leg) / BOAT_LENGTH_PX,
+    opponentDecisions,
   };
 }
 

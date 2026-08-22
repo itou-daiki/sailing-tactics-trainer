@@ -274,6 +274,27 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-setup h2, .free-watch h2, .free-replay h2 { margin: 8px 0 18px; font-size: 1.55rem; line-height: 1.3; }
 .free-setup, .free-watch, .free-replay { min-width: 0; }
 .free-replay .event-strip { width: 100%; max-width: 100%; }
+.free-drills { margin: 0 0 22px; border-top: 2px solid var(--ink); }
+.free-drills__heading { display: flex; align-items: end; justify-content: space-between; gap: 10px; padding: 14px 2px 11px; border-bottom: 1px solid var(--ink); }
+.free-drills__heading h3 { margin: 5px 0 0; font-size: 1rem; line-height: 1.35; }
+.free-drills__heading > span { color: var(--graphite); font: 800 .57rem/1 "Arial Narrow", sans-serif; letter-spacing: .1em; white-space: nowrap; }
+.free-drill-index { margin: 0; padding: 0; list-style: none; }
+.free-drill-index li { margin: 0; }
+.free-drill { position: relative; width: 100%; min-height: 72px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 24px; gap: 5px 9px; align-items: center; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--rule); color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.free-drill::before { content: ""; position: absolute; top: 8px; bottom: 8px; left: -2px; width: 0; background: var(--sea-deep); }
+.free-drill:hover { background: rgba(215, 233, 234, .3); }
+.free-drill.is-selected { padding-left: 9px; background: rgba(215, 233, 234, .55); }
+.free-drill.is-selected::before { width: 5px; }
+.free-drill__number { color: var(--sea-deep); font: 800 .75rem/1 "Arial Narrow", sans-serif; letter-spacing: .06em; }
+.free-drill__copy { min-width: 0; }
+.free-drill__copy strong, .free-drill__copy small { display: block; }
+.free-drill__copy strong { font-size: .75rem; }
+.free-drill__copy small { margin-top: 4px; color: var(--graphite); font-size: .6rem; line-height: 1.45; }
+.free-drill__tag { grid-column: 2; color: var(--sea-deep); font-size: .55rem; font-weight: 800; }
+.free-drill__arrow { grid-column: 3; grid-row: 1 / span 2; font-size: 1rem; text-align: center; }
+.free-custom-divider { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: center; margin-top: 6px; padding: 11px 0; border-bottom: 1px solid var(--ink); }
+.free-custom-divider span { color: var(--signal); font: 800 .59rem/1 "Arial Narrow", sans-serif; letter-spacing: .1em; }
+.free-custom-divider strong { font-size: .68rem; }
 .free-control-group { margin: 0; padding: 15px 0; border: 0; border-top: 1px solid var(--rule); }
 .free-control-group legend { padding: 0 8px 0 0; color: var(--ink); font-size: .72rem; font-weight: 800; }
 .free-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 5px; }
@@ -288,6 +309,30 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-range-readout span:last-child { text-align: right; }
 .free-range-readout output { color: var(--ink); font: 800 1rem/1.2 "Arial Narrow", "BIZ UDPGothic", sans-serif; }
 .free-control-group input[type="range"] { width: 100%; min-height: 34px; margin: 0; accent-color: var(--signal); }
+.free-plan { position: relative; margin: 10px 0 0; padding: 18px 0; border: 0; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.free-plan legend { padding: 0 8px 0 0; font-size: .72rem; font-weight: 800; }
+.free-plan__tape { display: inline-block; margin: 2px 0 8px; padding: 5px 8px; color: var(--ink); background: var(--wind); font: 800 .59rem/1 "Arial Narrow", sans-serif; letter-spacing: .11em; transform: rotate(-1deg); }
+.free-plan h3 { margin: 0 0 6px; font-size: .95rem; line-height: 1.4; }
+.free-plan > p { margin: 0 0 12px; color: var(--graphite); font-size: .67rem; line-height: 1.6; }
+.free-plan__cues { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 4px; }
+.free-plan__cues button { min-height: 58px; padding: 7px 4px; border: 1px solid var(--rule); color: var(--graphite); background: transparent; cursor: pointer; }
+.free-plan__cues button span, .free-plan__cues button strong { display: block; }
+.free-plan__cues button span { font-size: .57rem; }
+.free-plan__cues button strong { margin-top: 4px; color: var(--ink); font: 800 .85rem/1 "Arial Narrow", sans-serif; }
+.free-plan__cues button.is-selected { border: 2px solid var(--ink); color: var(--ink); background: var(--sea); }
+.free-plan__range { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; align-items: center; margin-top: 11px; }
+.free-plan__range label { color: var(--graphite); font-size: .62rem; font-weight: 800; }
+.free-plan__range output { font: 800 .9rem/1 "Arial Narrow", sans-serif; }
+.free-plan__range input { grid-column: 1 / -1; width: 100%; min-height: 34px; margin: 0; accent-color: var(--signal); }
+.free-share { display: grid; gap: 10px; margin: 18px 0; padding: 13px 12px; border: 1px solid var(--ink); border-left: 6px solid var(--sea-deep); }
+.free-share__label { color: var(--sea-deep); font: 800 .58rem/1 "Arial Narrow", sans-serif; letter-spacing: .09em; }
+.free-share h3 { margin: 5px 0 4px; font-size: .88rem; }
+.free-share p { margin: 0; color: var(--graphite); font-size: .64rem; line-height: 1.55; }
+.free-share button { min-height: 48px; padding: 8px 12px; border: 2px solid var(--ink); color: var(--ink); background: var(--sail); font-size: .7rem; font-weight: 800; cursor: pointer; }
+.free-share button:hover { color: var(--sail); background: var(--sea-deep); }
+.free-share .free-share__status { color: var(--good); font-weight: 800; }
+.free-share__status:empty { display: none; }
+.free-share__url { width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--rule); color: var(--ink); background: #fff; font-size: .62rem; }
 .free-start-note { margin: 8px 0 18px; padding: 12px 13px; border-left: 5px solid var(--wind); background: #fffef5; }
 .free-start-note strong { font-size: .73rem; }
 .free-start-note p { margin: 4px 0 0; color: var(--graphite); font-size: .7rem; line-height: 1.6; }
@@ -308,6 +353,21 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-result-number span { color: var(--graphite); font-size: .7rem; font-weight: 800; }
 .free-result-number strong { font: 800 1.75rem/1 "Arial Narrow", "BIZ UDPGothic", sans-serif; white-space: nowrap; }
 .free-result-explanation { margin: 12px 0 18px; }
+.free-plan-review { margin: 20px 0 22px; padding: 16px 0; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.free-plan-review h3 { margin: 6px 0 13px; font-size: 1.08rem; }
+.free-plan-review__rail { display: grid; grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr) 14px minmax(0, 1fr); align-items: stretch; }
+.free-plan-review__rail > div { min-width: 0; padding: 9px 5px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); text-align: center; }
+.free-plan-review__rail > div:first-child { border-left: 5px solid var(--wind); }
+.free-plan-review__rail > div:last-child { border-right: 5px solid var(--sea-deep); }
+.free-plan-review__rail span, .free-plan-review__rail strong, .free-plan-review__rail small { display: block; }
+.free-plan-review__rail span { color: var(--sea-deep); font: 800 .53rem/1 "Arial Narrow", sans-serif; letter-spacing: .1em; }
+.free-plan-review__rail strong { overflow: hidden; margin-top: 5px; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.free-plan-review__rail small { margin-top: 4px; color: var(--graphite); font-size: .5rem; line-height: 1.2; }
+.free-plan-review__rail i { display: grid; place-items: center; color: var(--graphite); font-style: normal; font-size: .7rem; }
+.free-plan-review > p { margin: 12px 0; color: var(--graphite); font-size: .7rem; line-height: 1.7; }
+.free-plan-review__question { display: grid; gap: 3px; padding: 10px 11px; border-left: 5px solid var(--wind); background: #fffef5; }
+.free-plan-review__question strong { font-size: .62rem; }
+.free-plan-review__question span { color: var(--graphite); font-size: .67rem; line-height: 1.5; }
 .free-mark-result { display: grid; gap: 5px; margin-bottom: 18px; padding: 13px 12px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); border-left: 7px solid var(--good); }
 .free-mark-result--missed, .free-mark-result--timeout { border-left-color: var(--signal); }
 .free-mark-result span { color: var(--graphite); font: 800 .6rem/1 "Arial Narrow", sans-serif; letter-spacing: .11em; }

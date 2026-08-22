@@ -3,11 +3,14 @@ import {
   DEFAULT_FREE_CONFIG,
   FREE_SCENARIO_MAX_DURATION,
   analyzeFirstManeuverTiming,
+  evaluateManeuverPlan,
   getFreeWindAngle,
   getFreeWindTimeline,
   getOpponentManeuverTimes,
   getRelativeGainDifferenceAtCommonTime,
+  parseFreeScenarioConfig,
   runFreeScenario,
+  serializeFreeScenarioConfig,
   type FreeScenarioConfig,
 } from "./freeSimulation";
 
@@ -137,5 +140,40 @@ describe("フリーシミュレーション", () => {
         }
       }
     }
+  });
+
+  it("海面設定を共有URL用のクエリへ変換し、同じ設定へ戻せる", () => {
+    const sharedConfig = config({
+      leg: "downwind",
+      shiftAngle: -18,
+      windPattern: "return-past",
+      windTempo: "slow",
+      leverageBoatLengths: 20,
+      opponentMode: "cover",
+    });
+
+    const search = serializeFreeScenarioConfig(sharedConfig);
+
+    expect(search).toBe("v=1&leg=downwind&shift=-18&pattern=return-past&tempo=slow&leverage=20&opponent=cover");
+    expect(parseFreeScenarioConfig(`?${search}`)).toEqual(sharedConfig);
+  });
+
+  it("壊れた共有値は安全な範囲へ直し、未対応バージョンは読み込まない", () => {
+    expect(parseFreeScenarioConfig(
+      "?v=1&leg=unknown&shift=99&pattern=unknown&tempo=unknown&leverage=-3&opponent=unknown",
+    )).toEqual({
+      ...DEFAULT_FREE_CONFIG,
+      shiftAngle: 18,
+      leverageBoatLengths: 2,
+    });
+    expect(parseFreeScenarioConfig("?v=2&leg=downwind")).toBeNull();
+    expect(parseFreeScenarioConfig("")).toBeNull();
+  });
+
+  it("走る前の予定と最初の操作を、予定どおり・早い・遅い・未実行に分ける", () => {
+    expect(evaluateManeuverPlan(10, [10, 22])).toMatchObject({ rating: "on-plan", delta: 0 });
+    expect(evaluateManeuverPlan(10, [7])).toMatchObject({ rating: "early", delta: -3 });
+    expect(evaluateManeuverPlan(10, [14])).toMatchObject({ rating: "late", delta: 4 });
+    expect(evaluateManeuverPlan(10, [])).toMatchObject({ rating: "not-executed", actualTime: null });
   });
 });

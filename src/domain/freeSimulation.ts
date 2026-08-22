@@ -52,6 +52,15 @@ export interface FreeWindTimeline {
   returnEnd: number;
 }
 
+export type ManeuverPlanRating = "on-plan" | "early" | "late" | "not-executed";
+
+export interface ManeuverPlanReview {
+  plannedTime: number;
+  actualTime: number | null;
+  delta: number | null;
+  rating: ManeuverPlanRating;
+}
+
 export type TimingOffset = -4 | 0 | 4;
 
 export interface TimingTrial {
@@ -84,10 +93,86 @@ const degreesToRadians = (degrees: number) => (degrees * Math.PI) / 180;
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
+const isCourseLeg = (value: string | null): value is CourseLeg =>
+  value === "upwind" || value === "downwind";
+
+const isWindPattern = (value: string | null): value is WindPattern =>
+  value === "hold" || value === "return" || value === "return-past";
+
+const isWindTempo = (value: string | null): value is WindTempo =>
+  value === "quick" || value === "standard" || value === "slow";
+
+const isOpponentMode = (value: string | null): value is OpponentMode =>
+  value === "hold" || value === "fixed" || value === "cover";
+
+const readBoundedInteger = (
+  value: string | null,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) => {
+  if (value === null || value.trim() === "") return fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? clamp(Math.round(number), minimum, maximum) : fallback;
+};
+
+// URLSearchParams is the browser-standard query serializer used by the share link.
+// Source: https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams
+export function serializeFreeScenarioConfig(config: FreeScenarioConfig): string {
+  const parameters = new URLSearchParams();
+  parameters.set("v", "1");
+  parameters.set("leg", config.leg);
+  parameters.set("shift", String(clamp(Math.round(config.shiftAngle), -18, 18)));
+  parameters.set("pattern", config.windPattern);
+  parameters.set("tempo", config.windTempo);
+  parameters.set("leverage", String(clamp(Math.round(config.leverageBoatLengths), 2, 22)));
+  parameters.set("opponent", config.opponentMode);
+  return parameters.toString();
+}
+
+export function parseFreeScenarioConfig(search: string): FreeScenarioConfig | null {
+  const parameters = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (parameters.get("v") !== "1") return null;
+
+  const leg = parameters.get("leg");
+  const windPattern = parameters.get("pattern");
+  const windTempo = parameters.get("tempo");
+  const opponentMode = parameters.get("opponent");
+
+  return {
+    leg: isCourseLeg(leg) ? leg : DEFAULT_FREE_CONFIG.leg,
+    shiftAngle: readBoundedInteger(parameters.get("shift"), DEFAULT_FREE_CONFIG.shiftAngle, -18, 18),
+    windPattern: isWindPattern(windPattern) ? windPattern : DEFAULT_FREE_CONFIG.windPattern,
+    windTempo: isWindTempo(windTempo) ? windTempo : DEFAULT_FREE_CONFIG.windTempo,
+    leverageBoatLengths: readBoundedInteger(
+      parameters.get("leverage"),
+      DEFAULT_FREE_CONFIG.leverageBoatLengths,
+      2,
+      22,
+    ),
+    opponentMode: isOpponentMode(opponentMode) ? opponentMode : DEFAULT_FREE_CONFIG.opponentMode,
+  };
+}
+
 const normalizeManeuverTimes = (times: number[]) =>
   [...new Set(times.map((time) => Math.round(time)))]
     .filter((time) => time >= 0 && time <= FREE_SCENARIO_MAX_DURATION)
     .sort((a, b) => a - b);
+
+export function evaluateManeuverPlan(
+  requestedPlannedTime: number,
+  userManeuverTimes: number[],
+): ManeuverPlanReview {
+  const plannedTime = clamp(Math.round(requestedPlannedTime), 1, FREE_SCENARIO_MAX_DURATION);
+  const actualTime = normalizeManeuverTimes(userManeuverTimes)[0] ?? null;
+  if (actualTime === null) {
+    return { plannedTime, actualTime, delta: null, rating: "not-executed" };
+  }
+
+  const delta = actualTime - plannedTime;
+  const rating = Math.abs(delta) <= 1 ? "on-plan" : delta < 0 ? "early" : "late";
+  return { plannedTime, actualTime, delta, rating };
+}
 
 const WIND_TIMELINES: Record<WindTempo, FreeWindTimeline> = {
   quick: { shiftStart: 2, peak: 7, returnStart: 11, returnEnd: 22 },

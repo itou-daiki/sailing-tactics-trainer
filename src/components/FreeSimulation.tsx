@@ -4,9 +4,12 @@ import { BOAT_LENGTH_PX } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
   analyzeFirstManeuverTiming,
+  evaluateManeuverPlan,
   getFreeWindTimeline,
   getRelativeGainDifferenceAtCommonTime,
+  parseFreeScenarioConfig,
   runFreeScenario,
+  serializeFreeScenarioConfig,
   type CourseLeg,
   type FreeScenarioConfig,
   type OpponentMode,
@@ -16,6 +19,22 @@ import {
 } from "../domain/freeSimulation";
 
 type FreePhase = "setup" | "playing" | "replay";
+
+type PlanCue = "shiftStart" | "peak" | "returnStart";
+
+interface FreeDrillPreset {
+  id: string;
+  label: string;
+  focus: string;
+  tag: string;
+  config: FreeScenarioConfig;
+  planCue: PlanCue;
+}
+
+interface InitialFreeSetup {
+  config: FreeScenarioConfig;
+  loadedFromSharedLink: boolean;
+}
 
 const WIND_PATTERNS: Array<{ value: WindPattern; label: string; note: string }> = [
   { value: "return", label: "平均へ戻る", note: "暫定ゲインが消える過程を見る" },
@@ -39,6 +58,96 @@ const LEG_OPTIONS: Array<{ value: CourseLeg; label: string; action: string }> = 
   { value: "upwind", label: "上り", action: "タック" },
   { value: "downwind", label: "下り", action: "ジャイブ" },
 ];
+
+const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
+  {
+    id: "oscillating-return",
+    label: "振れ戻りを待つ",
+    focus: "暫定ゲインが消え始める合図を探す",
+    tag: "上り・振れ戻り",
+    config: {
+      leg: "upwind",
+      shiftAngle: 12,
+      windPattern: "return",
+      windTempo: "standard",
+      leverageBoatLengths: 14,
+      opponentMode: "hold",
+    },
+    planCue: "returnStart",
+  },
+  {
+    id: "persistent-shift",
+    label: "振れが残る海面",
+    focus: "戻る風と戻らない風で判断を分ける",
+    tag: "上り・パーシステント",
+    config: {
+      leg: "upwind",
+      shiftAngle: -12,
+      windPattern: "hold",
+      windTempo: "quick",
+      leverageBoatLengths: 12,
+      opponentMode: "fixed",
+    },
+    planCue: "peak",
+  },
+  {
+    id: "cover-response",
+    label: "カバーとの間合い",
+    focus: "相手が2秒後に追うときの差を見る",
+    tag: "上り・2艇比較",
+    config: {
+      leg: "upwind",
+      shiftAngle: 8,
+      windPattern: "return",
+      windTempo: "slow",
+      leverageBoatLengths: 8,
+      opponentMode: "cover",
+    },
+    planCue: "peak",
+  },
+  {
+    id: "downwind-reversal",
+    label: "下りの有利側逆転",
+    focus: "平均を越す振れ戻りでジャイブを比べる",
+    tag: "下り・ジャイブ",
+    config: {
+      leg: "downwind",
+      shiftAngle: -14,
+      windPattern: "return-past",
+      windTempo: "standard",
+      leverageBoatLengths: 16,
+      opponentMode: "fixed",
+    },
+    planCue: "returnStart",
+  },
+];
+
+const readInitialFreeSetup = (): InitialFreeSetup => {
+  if (typeof window === "undefined") {
+    return { config: DEFAULT_FREE_CONFIG, loadedFromSharedLink: false };
+  }
+  const sharedConfig = parseFreeScenarioConfig(window.location.search);
+  return {
+    config: sharedConfig ?? DEFAULT_FREE_CONFIG,
+    loadedFromSharedLink: sharedConfig !== null,
+  };
+};
+
+const getPresetPlanTime = (preset: FreeDrillPreset) =>
+  getFreeWindTimeline(preset.config)[preset.planCue];
+
+const isSameConfig = (left: FreeScenarioConfig, right: FreeScenarioConfig) =>
+  serializeFreeScenarioConfig(left) === serializeFreeScenarioConfig(right);
+
+const buildScenarioShareUrl = (config: FreeScenarioConfig) => {
+  const currentUrl = new URL(window.location.href);
+  const url = currentUrl.protocol === "file:"
+    ? new URL("https://itou-daiki.github.io/sailing-tactics-trainer/")
+    : currentUrl;
+  url.search = serializeFreeScenarioConfig(config);
+  url.hash = "free-sail";
+  return url.toString();
+};
 
 const getShiftLabel = (angle: number) => {
   if (angle === 0) return "振れなし 0°";
@@ -126,6 +235,213 @@ function ChoiceButtons<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+function DrillIndex({
+  config,
+  onSelect,
+}: {
+  config: FreeScenarioConfig;
+  onSelect: (preset: FreeDrillPreset) => void;
+}) {
+  return (
+    <section className="free-drills" aria-labelledby="free-drills-heading">
+      <div className="free-drills__heading">
+        <div>
+          <div className="section-kicker">COACH DRILLS / すぐ試す海面</div>
+          <h3 id="free-drills-heading">見分けたい場面から選ぶ。</h3>
+        </div>
+        <span>4 DRILLS</span>
+      </div>
+      <ol className="free-drill-index">
+        {FREE_DRILL_PRESETS.map((preset, index) => {
+          const selected = isSameConfig(config, preset.config);
+          return (
+            <li key={preset.id}>
+              <button
+                type="button"
+                className={selected ? "free-drill is-selected" : "free-drill"}
+                aria-pressed={selected}
+                onClick={() => onSelect(preset)}
+              >
+                <span className="free-drill__number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="free-drill__copy">
+                  <strong>{preset.label}</strong>
+                  <small>{preset.focus}</small>
+                </span>
+                <span className="free-drill__tag">{preset.tag}</span>
+                <span className="free-drill__arrow" aria-hidden="true">→</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function ManeuverPlan({
+  config,
+  plannedTime,
+  onChange,
+}: {
+  config: FreeScenarioConfig;
+  plannedTime: number;
+  onChange: (time: number) => void;
+}) {
+  const timeline = getFreeWindTimeline(config);
+  const maneuverLabel = config.leg === "upwind" ? "タック" : "ジャイブ";
+  const cues = [
+    { label: "振れ始め", time: timeline.shiftStart },
+    { label: "最大振れ", time: timeline.peak },
+    ...(config.windPattern === "hold"
+      ? []
+      : [{ label: "戻り始め", time: timeline.returnStart }]),
+  ];
+
+  return (
+    <fieldset className="free-plan">
+      <legend>7　走る前のプラン</legend>
+      <div className="free-plan__tape" aria-hidden="true">PLAN → DO → REVIEW</div>
+      <h3>最初の{maneuverLabel}を、何秒に予定する？</h3>
+      <p>正解当てではありません。先に予定を置くと、風や相手を見て変えた判断をリプレイで説明できます。</p>
+      <div className="free-plan__cues" aria-label={`${maneuverLabel}予定の合図`}>
+        {cues.map((cue) => (
+          <button
+            key={cue.label}
+            type="button"
+            className={plannedTime === cue.time ? "is-selected" : ""}
+            aria-pressed={plannedTime === cue.time}
+            onClick={() => onChange(cue.time)}
+          >
+            <span>{cue.label}</span>
+            <strong>{cue.time}秒</strong>
+          </button>
+        ))}
+      </div>
+      <div className="free-plan__range">
+        <label htmlFor="free-plan-time">自分で時刻を調整</label>
+        <output htmlFor="free-plan-time">{plannedTime}秒</output>
+        <input
+          id="free-plan-time"
+          type="range"
+          min="1"
+          max="40"
+          step="1"
+          value={plannedTime}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </div>
+    </fieldset>
+  );
+}
+
+type ShareFeedback = { url: string; status: "shared" | "copied" | "manual" } | null;
+
+function ShareScenario({
+  config,
+  loadedFromSharedLink,
+}: {
+  config: FreeScenarioConfig;
+  loadedFromSharedLink: boolean;
+}) {
+  const [feedback, setFeedback] = useState<ShareFeedback>(null);
+  const currentUrl = typeof window === "undefined" ? "" : buildScenarioShareUrl(config);
+  const currentFeedback = feedback?.url === currentUrl ? feedback.status : null;
+
+  const share = async () => {
+    const shareData = {
+      title: "SHIFT｜420 TACTICS 練習海面",
+      text: "同じ条件で走って、最初のタック／ジャイブを比べよう。",
+      url: currentUrl,
+    };
+
+    // Web Share must run directly from a user action; clipboard is the fallback.
+    // Sources: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share
+    // https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share(shareData);
+        setFeedback({ url: currentUrl, status: "shared" });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      setFeedback({ url: currentUrl, status: "copied" });
+    } catch {
+      setFeedback({ url: currentUrl, status: "manual" });
+    }
+  };
+
+  return (
+    <section className="free-share" aria-labelledby="free-share-heading">
+      <div>
+        <span className="free-share__label">TEAM LINK / 同じ海面を配る</span>
+        <h3 id="free-share-heading">設定をURLにして共有。</h3>
+        <p>{loadedFromSharedLink ? "この画面は共有URLの海面から始まっています。" : "登録なしで、今の風・距離・相手設定をそのまま送れます。"}</p>
+      </div>
+      <button type="button" onClick={share}>海面URLを共有</button>
+      <p className="free-share__status" aria-live="polite">
+        {currentFeedback === "shared" ? "共有メニューへ送りました。" : null}
+        {currentFeedback === "copied" ? "URLをコピーしました。" : null}
+        {currentFeedback === "manual" ? "下のURLを長押ししてコピーしてください。" : null}
+      </p>
+      {currentFeedback === "manual" ? (
+        <input
+          className="free-share__url"
+          aria-label="共有する海面URL"
+          readOnly
+          value={currentUrl}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function PlanReview({
+  plannedTime,
+  maneuverTimes,
+  maneuverLabel,
+}: {
+  plannedTime: number;
+  maneuverTimes: number[];
+  maneuverLabel: string;
+}) {
+  const review = evaluateManeuverPlan(plannedTime, maneuverTimes);
+  const differenceLabel = review.delta === null
+    ? "予定を変更"
+    : review.rating === "on-plan"
+      ? "予定どおり"
+      : `${Math.abs(review.delta)}秒${review.delta < 0 ? "早い" : "遅い"}`;
+  const explanation = review.rating === "not-executed"
+    ? `今回は${maneuverLabel}しませんでした。予定を守らなかったこと自体ではなく、風・相手・マークのどれを見て変えたかが振り返りの中心です。`
+    : review.rating === "on-plan"
+      ? "予定どおり動けました。ただし、予定を守れたことと、戦術的に有利だったことは別です。下の航跡とゲインで確かめます。"
+      : `${review.actualTime}秒に実行し、予定から${differenceLabel}判断でした。予定を変えた合図を、風向・相手との横距離・マーク位置から1つ選んで説明してみましょう。`;
+
+  return (
+    <section className="free-plan-review" aria-labelledby="free-plan-review-heading">
+      <div className="section-kicker">PLAN → DO → REVIEW</div>
+      <h3 id="free-plan-review-heading">予定と実行を分けて見る。</h3>
+      <div className="free-plan-review__rail">
+        <div><span>PLAN</span><strong>{review.plannedTime}秒</strong><small>走る前</small></div>
+        <i aria-hidden="true">→</i>
+        <div><span>DO</span><strong>{review.actualTime === null ? "実行なし" : `${review.actualTime}秒`}</strong><small>最初の{maneuverLabel}</small></div>
+        <i aria-hidden="true">→</i>
+        <div><span>GAP</span><strong>{differenceLabel}</strong><small>予定との差</small></div>
+      </div>
+      <p>{explanation}</p>
+      <div className="free-plan-review__question">
+        <strong>次に決めること</strong>
+        <span>「予定を守る」か「見る合図を変える」か、どちらか1つ。</span>
+      </div>
+    </section>
   );
 }
 
@@ -276,17 +592,35 @@ function FreeWindStrip({
 
 function FreeSetup({
   config,
+  plannedTime,
+  loadedFromSharedLink,
   onChange,
+  onPlanTimeChange,
   onStart,
 }: {
   config: FreeScenarioConfig;
+  plannedTime: number;
+  loadedFromSharedLink: boolean;
   onChange: (config: FreeScenarioConfig) => void;
+  onPlanTimeChange: (time: number) => void;
   onStart: () => void;
 }) {
+  const selectPreset = (preset: FreeDrillPreset) => {
+    onChange({ ...preset.config });
+    onPlanTimeChange(getPresetPlanTime(preset));
+  };
+
   return (
     <section className="free-setup" aria-labelledby="free-setup-heading">
       <div className="section-kicker">SET SEA / 海面をつくる</div>
-      <h2 id="free-setup-heading">何を変えて試す？</h2>
+      <h2 id="free-setup-heading">今日、何を見分ける？</h2>
+
+      <DrillIndex config={config} onSelect={selectPreset} />
+
+      <div className="free-custom-divider">
+        <span>CUSTOM SETUP</span>
+        <strong>条件を細かく変える</strong>
+      </div>
 
       <fieldset className="free-control-group">
         <legend>1　走るレグ</legend>
@@ -366,9 +700,17 @@ function FreeSetup({
         />
       </fieldset>
 
+      <ManeuverPlan
+        config={config}
+        plannedTime={plannedTime}
+        onChange={onPlanTimeChange}
+      />
+
+      <ShareScenario config={config} loadedFromSharedLink={loadedFromSharedLink} />
+
       <div className="free-start-note">
-        <strong>正解は表示しません。</strong>
-        <p>条件を1つずつ変え、「なぜ差が変わったか」を操作なしの航跡と比べます。</p>
+        <strong>正解の秒数は表示しません。</strong>
+        <p>予定と実行が違っても失敗ではありません。「何を見て変えたか」を操作なしの航跡と比べます。</p>
       </div>
       <button type="button" className="primary-action" onClick={onStart}>
         この海面で走る <span aria-hidden="true">→</span>
@@ -378,9 +720,18 @@ function FreeSetup({
 }
 
 export function FreeSimulation({ onBack }: { onBack: () => void }) {
+  // Lazy initialization keeps shared-link parsing to the component's initial setup.
+  // Source: https://react.dev/reference/react/useState#avoiding-recreating-the-initial-state
+  const [initialSetup] = useState<InitialFreeSetup>(readInitialFreeSetup);
   const [phase, setPhase] = useState<FreePhase>("setup");
-  const [draftConfig, setDraftConfig] = useState<FreeScenarioConfig>(DEFAULT_FREE_CONFIG);
-  const [activeConfig, setActiveConfig] = useState<FreeScenarioConfig>(DEFAULT_FREE_CONFIG);
+  const [draftConfig, setDraftConfig] = useState<FreeScenarioConfig>(initialSetup.config);
+  const [activeConfig, setActiveConfig] = useState<FreeScenarioConfig>(initialSetup.config);
+  const [draftPlannedTime, setDraftPlannedTime] = useState(() =>
+    getFreeWindTimeline(initialSetup.config).peak
+  );
+  const [activePlannedTime, setActivePlannedTime] = useState(() =>
+    getFreeWindTimeline(initialSetup.config).peak
+  );
   const [time, setTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [liveSpeed, setLiveSpeed] = useState(1);
@@ -441,8 +792,9 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     return () => window.clearTimeout(timer);
   }, [isReplayPlaying, phase, replay.endTime, replaySpeed, time]);
 
-  const start = (config = draftConfig) => {
+  const start = (config = draftConfig, plannedTime = draftPlannedTime) => {
     setActiveConfig({ ...config });
+    setActivePlannedTime(plannedTime);
     setTime(0);
     setUserManeuverTimes([]);
     setIsPaused(false);
@@ -458,6 +810,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
 
   const changeConditions = () => {
     setDraftConfig(activeConfig);
+    setDraftPlannedTime(activePlannedTime);
     setTime(0);
     setIsReplayPlaying(false);
     setPhase("setup");
@@ -529,7 +882,14 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
 
         <aside className="free-workspace__controls">
           {phase === "setup" ? (
-            <FreeSetup config={draftConfig} onChange={setDraftConfig} onStart={() => start()} />
+            <FreeSetup
+              config={draftConfig}
+              plannedTime={draftPlannedTime}
+              loadedFromSharedLink={initialSetup.loadedFromSharedLink}
+              onChange={setDraftConfig}
+              onPlanTimeChange={setDraftPlannedTime}
+              onStart={() => start()}
+            />
           ) : null}
 
           {phase === "playing" ? (
@@ -542,8 +902,10 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <div><dt>現在の横距離</dt><dd>{(currentFrame.leverage / BOAT_LENGTH_PX).toFixed(1)}艇身</dd></div>
                 <div><dt>操作回数</dt><dd>{userManeuverTimes.length}回</dd></div>
                 <div><dt>相手の操作</dt><dd>{replay.opponentManeuverTimes.filter((eventTime) => eventTime <= time).length}回</dd></div>
+                <div><dt>最初の予定</dt><dd>{activePlannedTime}秒</dd></div>
+                <div><dt>最初の実行</dt><dd>{userManeuverTimes[0] === undefined ? "まだ" : `${userManeuverTimes[0]}秒`}</dd></div>
               </dl>
-              <button type="button" className="secondary-action free-reset-action" onClick={() => start(activeConfig)}>
+              <button type="button" className="secondary-action free-reset-action" onClick={() => start(activeConfig, activePlannedTime)}>
                 同じ条件で最初から
               </button>
               <div className="free-live-speed" role="group" aria-label="シミュレーションの進行速度">
@@ -593,6 +955,12 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                     ? `今回の${maneuverLabel}により、同じ時刻の操作なし航跡より前にいました。艇速ロスを払っても残ったゲインです。`
                     : `今回の${maneuverLabel}では、同じ時刻の操作なし航跡より後ろでした。風の戻りと艇速ロスを時間軸で確認します。`}
               </p>
+
+              <PlanReview
+                plannedTime={activePlannedTime}
+                maneuverTimes={userManeuverTimes}
+                maneuverLabel={maneuverLabel}
+              />
 
               <input
                 className="timeline-slider"
@@ -645,7 +1013,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <TimingLab analysis={timingAnalysis} maneuverLabel={maneuverLabel} />
               ) : null}
               <div className="free-replay-actions">
-                <button type="button" className="primary-action" onClick={() => start(activeConfig)}>同じ条件でもう一度</button>
+                <button type="button" className="primary-action" onClick={() => start(activeConfig, activePlannedTime)}>同じ条件でもう一度</button>
                 <button type="button" className="secondary-action" onClick={changeConditions}>条件を変える</button>
                 <button type="button" className="text-action" onClick={onBack}>コース一覧へ</button>
               </div>

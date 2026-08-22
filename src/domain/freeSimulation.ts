@@ -330,6 +330,7 @@ export function runFreeScenario(
   const scheduledOpponentManeuverTimes = getOpponentManeuverTimes(config, userManeuverTimes);
   const opponentManeuverTimes: number[] = [];
   const opponentLaylineTackTimes = new Set<number>();
+  const opponentMeetingTackTimes = new Set<number>();
   const opponentAvoidanceTimes: number[] = [];
   const separation = clamp(config.leverageBoatLengths, 2, 22) * BOAT_LENGTH_PX;
   const initialY = config.leg === "upwind" ? 105 : 405;
@@ -363,17 +364,17 @@ export function runFreeScenario(
       opponentManeuverTimes.push(time);
       if (laylineManeuver) opponentLaylineTackTimes.add(time);
     }
-    const opponentTack = getTack(time, opponentManeuverTimes);
+    let opponentTack = getTack(time, opponentManeuverTimes);
     const userSpeed = getSpeed(time, userManeuverTimes, config.leg);
-    const opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
+    let opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
     const userHeading = getHeading(userTack, windAngle, config.leg);
-    const opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
+    let opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
     // RRS 10 requires the port-tack boat to keep clear of a starboard-tack boat.
-    // This teaching model represents that obligation with one consistent action:
-    // the opponent bears away for three seconds to pass behind the user.
+    // Before the layline, this model normally has the opponent tack away from a
+    // meeting. If the user already has positive relative gain, the opponent bears
+    // away for three seconds and passes behind instead.
     // Source: https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf
-    const isNewAvoidance = time - lastOpponentAvoidanceTime >= 6
-      && userTack === "starboard"
+    const willMeet = userTack === "starboard"
       && opponentTack === "port"
       && willMeetWithin(
         userPosition,
@@ -384,6 +385,25 @@ export function runFreeScenario(
         opponentCourseHeading,
         5,
       );
+    const userHasMeetingAdvantage = getLegRelativeGain(
+      userPosition,
+      opponentPosition,
+      windAngle,
+      config.leg,
+    ) > 0;
+    const canTackForMeeting = !scheduledManeuver
+      && !laylineManeuver
+      && time - lastOpponentManeuverTime >= 4;
+    if (willMeet && !userHasMeetingAdvantage && canTackForMeeting) {
+      opponentManeuverTimes.push(time);
+      opponentMeetingTackTimes.add(time);
+      opponentTack = getTack(time, opponentManeuverTimes);
+      opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
+      opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
+    }
+    const isNewAvoidance = willMeet
+      && (userHasMeetingAdvantage || !canTackForMeeting)
+      && time - lastOpponentAvoidanceTime >= 6;
     if (isNewAvoidance) {
       opponentAvoidUntil = time + 2;
       lastOpponentAvoidanceTime = time;
@@ -458,6 +478,8 @@ export function runFreeScenario(
       kind: "opponent-tack",
       label: opponentLaylineTackTimes.has(time)
         ? `相手がレイラインで${maneuver}`
+        : opponentMeetingTackTimes.has(time)
+          ? `相手がミート前に${maneuver}`
         : `相手が${maneuver}`,
     });
   }

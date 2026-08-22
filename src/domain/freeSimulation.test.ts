@@ -82,9 +82,27 @@ describe("フリーシミュレーション", () => {
     }));
   });
 
-  it("反対タックでミートし自艇がスターボードなら、相手が下って避ける", () => {
+  it("レイライン前のミートで自艇が後ろなら、相手はタックしてレイライン側へ返す", () => {
     const replay = runFreeScenario(config({
       shiftAngle: 0,
+      windPattern: "hold",
+      opponentMode: "hold",
+    }), [10]);
+    const meetingTack = replay.events.find((event) => event.label === "相手がミート前にタック");
+
+    expect(meetingTack).toBeDefined();
+    expect(meetingTack!.time).toBeLessThan(32);
+    const meetingFrame = replay.frames[meetingTack!.time];
+    expect(meetingFrame.user.tack).toBe("starboard");
+    expect(meetingFrame.opponent.tack).toBe("starboard");
+    expect(replay.events.some((event) =>
+      event.kind === "avoid" && event.time <= meetingTack!.time + 5
+    )).toBe(false);
+  });
+
+  it("レイライン前のミートで自艇が前なら、相手は下って後ろを通る", () => {
+    const replay = runFreeScenario(config({
+      shiftAngle: 10,
       windPattern: "hold",
       opponentMode: "hold",
     }), [10]);
@@ -92,10 +110,14 @@ describe("フリーシミュレーション", () => {
 
     expect(avoidance).toBeDefined();
     const avoidanceFrame = replay.frames[avoidance!.time];
+    expect(avoidanceFrame.relativeGain).toBeGreaterThan(0);
     expect(avoidanceFrame.user.tack).toBe("starboard");
     expect(avoidanceFrame.opponent.tack).toBe("port");
     expect(avoidanceFrame.opponent.heading - avoidanceFrame.windAngle).toBeGreaterThan(60);
     expect(avoidance?.label).toBe("相手が航路権艇を避けて下る");
+    expect(replay.events.some((event) =>
+      event.label === "相手がミート前にタック" && event.time <= avoidance!.time
+    )).toBe(false);
   });
 
   it("同じ時刻で操作ありと操作なしのゲイン差を比較する", () => {

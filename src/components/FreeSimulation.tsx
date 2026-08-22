@@ -49,7 +49,7 @@ const WIND_TEMPOS: Array<{ value: WindTempo; label: string; note: string }> = [
 ];
 
 const OPPONENT_MODES: Array<{ value: OpponentMode; label: string; note: string }> = [
-  { value: "hold", label: "レイライン優先", note: "レイラインで必ず返す" },
+  { value: "hold", label: "レイライン判断", note: "ミートならタック、前ならベア" },
   { value: "fixed", label: "18秒で先に返す", note: "その後もレイラインを守る" },
   { value: "cover", label: "2秒後にカバー", note: "追従後もレイラインを守る" },
 ];
@@ -158,7 +158,7 @@ const getPatternLabel = (pattern: WindPattern) =>
   WIND_PATTERNS.find((option) => option.value === pattern)?.label ?? "平均へ戻る";
 
 const getOpponentLabel = (mode: OpponentMode) =>
-  OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "レイライン優先";
+  OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "レイライン判断";
 
 const getTempoLabel = (tempo: WindTempo) =>
   WIND_TEMPOS.find((option) => option.value === tempo)?.label ?? "標準";
@@ -181,12 +181,16 @@ const getExplanation = (
   relativeGain: number,
   maneuverCount: number,
   opponentIsAvoiding = false,
+  opponentTackedAtMeeting = false,
 ) => {
   const side = config.shiftAngle < 0 ? "左" : config.shiftAngle > 0 ? "右" : "左右どちらにも";
   const action = config.leg === "upwind" ? "タック" : "ジャイブ";
   const timeline = getFreeWindTimeline(config);
+  if (opponentTackedAtMeeting) {
+    return "まだレイライン前です。自艇が後ろなので、相手はミート前にタックしてレイライン側へ返します。";
+  }
   if (opponentIsAvoiding) {
-    return `反対タックでミートします。自艇がスターボードの航路権艇なので、相手は${config.leg === "upwind" ? "ベアして" : "さらに下って"}自艇の後ろを通ります。`;
+    return `自艇はスターボードで、前後のゲインもあります。相手は前へタックできないため、${config.leg === "upwind" ? "ベアして" : "さらに下って"}自艇の後ろを通ります。`;
   }
   if (time <= timeline.shiftStart) {
     return `まず${config.leverageBoatLengths}艇身の横の距離を確認。風が振れる前は、2艇の前後差はほぼありません。`;
@@ -703,7 +707,7 @@ function FreeSetup({
           onChange={(opponentMode) => onChange({ ...config, opponentMode })}
         />
         <p className="free-opponent-rule-note">
-          共通動作：相手はマークのレイラインで必ず返します。反対タックでミートし、自艇がスターボードなら、相手がベアして後ろを通ります。
+          共通動作：レイライン前のミートでは、相手はまずタックしてレイライン側へ返します。ただし、自艇が前にいるときはベアして後ろを通ります。ミートがなければレイラインで返します。
         </p>
       </fieldset>
 
@@ -838,12 +842,18 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const opponentIsAvoiding = displayReplay.events.some((event) =>
     event.kind === "avoid" && displayTime >= event.time && displayTime <= event.time + 2
   );
+  const opponentTackedAtMeeting = displayReplay.events.some((event) =>
+    event.kind === "opponent-tack"
+      && event.label.includes("ミート前")
+      && displayTime === event.time
+  );
   const currentExplanation = getExplanation(
     displayTime,
     displayConfig,
     gain,
     userManeuverTimes.length,
     opponentIsAvoiding,
+    opponentTackedAtMeeting,
   );
   const toggleReplay = () => {
     if (isReplayPlaying) {
@@ -918,7 +928,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <div><dt>相手との差</dt><dd>{gain >= 0 ? "+" : ""}{gain.toFixed(1)}艇身</dd></div>
                 <div><dt>現在の横距離</dt><dd>{(currentFrame.leverage / BOAT_LENGTH_PX).toFixed(1)}艇身</dd></div>
                 <div><dt>操作回数</dt><dd>{userManeuverTimes.length}回</dd></div>
-                <div><dt>相手の状態</dt><dd>{opponentIsAvoiding ? "ベア中" : `${replay.opponentManeuverTimes.filter((eventTime) => eventTime <= time).length}回操作`}</dd></div>
+                <div><dt>相手の状態</dt><dd>{opponentTackedAtMeeting ? "ミート前にタック" : opponentIsAvoiding ? "ベア中" : `${replay.opponentManeuverTimes.filter((eventTime) => eventTime <= time).length}回操作`}</dd></div>
                 <div><dt>最初の予定</dt><dd>{activePlannedTime}秒</dd></div>
                 <div><dt>最初の実行</dt><dd>{userManeuverTimes[0] === undefined ? "まだ" : `${userManeuverTimes[0]}秒`}</dd></div>
               </dl>

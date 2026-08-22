@@ -1,9 +1,14 @@
 export const BOAT_LENGTH_PX = 10;
-export const SCENARIO_DURATION = 34;
+export const SCENARIO_MAX_DURATION = 90;
+export const FINAL_APPROACH_START = 34;
 export const COACH_TACK_TIME = 10;
 export const OPPONENT_TACK_TIME = 21;
+export const UPWIND_MARK: Point = { x: 275, y: 445 };
+export const DOWNWIND_MARK: Point = { x: 275, y: 95 };
+export const MARK_REACH_RADIUS_PX = 42;
 
 export type Tack = "port" | "starboard";
+export type MarkResult = "reached" | "missed" | "timeout";
 
 export interface Point {
   x: number;
@@ -32,7 +37,8 @@ export type EventKind =
   | "opponent-tack"
   | "cross-window"
   | "return"
-  | "mean";
+  | "mean"
+  | "finish";
 
 export interface ScenarioEvent {
   time: number;
@@ -55,6 +61,9 @@ export interface ScenarioReplay {
   opponentManeuverLoss: number;
   finalRelativeGain: number;
   gainChange: number;
+  endTime: number;
+  markDistance: number;
+  markResult: MarkResult;
   decision: DecisionFeedback;
 }
 
@@ -90,6 +99,11 @@ export function getLeverage(boat: Point, reference: Point, windAngle: number): n
   return Math.abs(dx * Math.cos(radians) - dy * Math.sin(radians));
 }
 
+export function getMarkDistance(boat: Point, leg: "upwind" | "downwind"): number {
+  const mark = leg === "upwind" ? UPWIND_MARK : DOWNWIND_MARK;
+  return Math.hypot(boat.x - mark.x, boat.y - mark.y);
+}
+
 function getSpeed(time: number, tackTime: number | null): number {
   const baseSpeed = 8.4;
   if (tackTime === null || time < tackTime) return baseSpeed;
@@ -101,6 +115,13 @@ function getSpeed(time: number, tackTime: number | null): number {
 
 function getTack(time: number, tackTime: number | null): Tack {
   return tackTime !== null && time >= tackTime ? "starboard" : "port";
+}
+
+function getFinalApproachTack(position: Point, currentTack: Tack): Tack {
+  const sideTolerance = 18;
+  if (position.x > UPWIND_MARK.x + sideTolerance) return "starboard";
+  if (position.x < UPWIND_MARK.x - sideTolerance) return "port";
+  return currentTack;
 }
 
 function getHeading(tack: Tack, windAngle: number): number {
@@ -159,13 +180,23 @@ export function runScenario(userTackTime: number | null): ScenarioReplay {
   let opponentManeuverLoss = 0;
   const baseSpeed = getSpeed(0, null);
   const frames: Frame[] = [];
+  let userFinalTack = getTack(FINAL_APPROACH_START, userTackTime);
+  let opponentFinalTack = getTack(FINAL_APPROACH_START, OPPONENT_TACK_TIME);
+  let markResult: MarkResult = "timeout";
 
-  for (let time = 0; time <= SCENARIO_DURATION; time += 1) {
+  for (let time = 0; time <= SCENARIO_MAX_DURATION; time += 1) {
     const windAngle = getWindAngle(time);
-    const userTack = getTack(time, userTackTime);
-    const opponentTack = getTack(time, OPPONENT_TACK_TIME);
-    const userSpeed = getSpeed(time, userTackTime);
-    const opponentSpeed = getSpeed(time, OPPONENT_TACK_TIME);
+    const isFinalApproach = time >= FINAL_APPROACH_START;
+    if (isFinalApproach) {
+      userFinalTack = getFinalApproachTack(userPosition, userFinalTack);
+      opponentFinalTack = getFinalApproachTack(opponentPosition, opponentFinalTack);
+    }
+    const userTack = isFinalApproach ? userFinalTack : getTack(time, userTackTime);
+    const opponentTack = isFinalApproach
+      ? opponentFinalTack
+      : getTack(time, OPPONENT_TACK_TIME);
+    const userSpeed = isFinalApproach ? baseSpeed : getSpeed(time, userTackTime);
+    const opponentSpeed = isFinalApproach ? baseSpeed : getSpeed(time, OPPONENT_TACK_TIME);
     const userHeading = getHeading(userTack, windAngle);
     const opponentHeading = getHeading(opponentTack, windAngle);
 
@@ -182,6 +213,16 @@ export function runScenario(userTackTime: number | null): ScenarioReplay {
       relativeGain: getRelativeGain(userPosition, opponentPosition, windAngle),
       leverage: getLeverage(userPosition, opponentPosition, windAngle),
     });
+
+    const markDistance = getMarkDistance(userPosition, "upwind");
+    if (time >= FINAL_APPROACH_START && markDistance <= MARK_REACH_RADIUS_PX) {
+      markResult = "reached";
+      break;
+    }
+    if (time >= FINAL_APPROACH_START && userPosition.y >= UPWIND_MARK.y) {
+      markResult = markDistance <= MARK_REACH_RADIUS_PX ? "reached" : "missed";
+      break;
+    }
 
     userManeuverLoss += baseSpeed - userSpeed;
     opponentManeuverLoss += baseSpeed - opponentSpeed;
@@ -202,6 +243,18 @@ export function runScenario(userTackTime: number | null): ScenarioReplay {
     events.push({ time: userTackTime, kind: "user-tack", label: "あなたがタック" });
   }
 
+  const arrivalTime = frames[frames.length - 1].time;
+  events.push({ time: FINAL_APPROACH_START, kind: "mean", label: "最終レグへ" });
+  events.push({
+    time: arrivalTime,
+    kind: "finish",
+    label: markResult === "reached"
+      ? "風上マークに到達"
+      : markResult === "missed"
+        ? "マークを外して通過"
+        : "制限時間で終了",
+  });
+
   events.sort((a, b) => a.time - b.time);
   const firstFrame = frames[0];
   const finalFrame = frames[frames.length - 1];
@@ -214,6 +267,9 @@ export function runScenario(userTackTime: number | null): ScenarioReplay {
     opponentManeuverLoss: opponentManeuverLoss / BOAT_LENGTH_PX,
     finalRelativeGain: finalFrame.relativeGain / BOAT_LENGTH_PX,
     gainChange: (finalFrame.relativeGain - firstFrame.relativeGain) / BOAT_LENGTH_PX,
+    endTime: arrivalTime,
+    markDistance: getMarkDistance(finalFrame.user, "upwind") / BOAT_LENGTH_PX,
+    markResult,
     decision: getDecisionFeedback(userTackTime),
   };
 }

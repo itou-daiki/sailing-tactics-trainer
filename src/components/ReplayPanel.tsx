@@ -1,12 +1,13 @@
 import type { ScenarioReplay } from "../domain/simulation";
-import { BOAT_LENGTH_PX, SCENARIO_DURATION } from "../domain/simulation";
+import { BOAT_LENGTH_PX } from "../domain/simulation";
 
 const phaseExplanation = (time: number) => {
   if (time < 4) return "まだ平均風向です。2艇の横の距離に注目してください。";
   if (time < 10) return "右側にいる自艇が、右振れによる暫定ゲインを得ています。";
   if (time <= 16) return "右振れは最大です。前をクロスできれば、ゲインを位置関係に変えられます。";
   if (time < 28) return "風が戻っています。横に離れたままだと、暫定ゲインも小さくなります。";
-  return "風は平均へ戻りました。残った差は、航跡とタックのタイミングで生まれた差です。";
+  if (time < 34) return "風は平均へ戻りました。残った差は、航跡とタックのタイミングで生まれた差です。";
+  return "判断区間の後も航跡を延ばし、風上マークへ到達するまでの最終レグを確認します。";
 };
 
 export function ReplayPanel({
@@ -38,7 +39,7 @@ export function ReplayPanel({
         className="timeline-slider"
         type="range"
         min="0"
-        max={SCENARIO_DURATION}
+        max={replay.endTime}
         step="1"
         value={time}
         aria-label="リプレイ時刻"

@@ -1,5 +1,9 @@
 import type { Frame, Point } from "../domain/simulation";
-import { BOAT_LENGTH_PX } from "../domain/simulation";
+import {
+  BOAT_LENGTH_PX,
+  getMarkDistance,
+  MARK_REACH_RADIUS_PX,
+} from "../domain/simulation";
 
 interface TrackReplay {
   frames: Frame[];
@@ -65,15 +69,18 @@ export function CourseBoard({
   const userPosition = screenPoint(frame.user);
   const opponentPosition = screenPoint(frame.opponent);
   const gain = frame.relativeGain / BOAT_LENGTH_PX;
+  const markDistance = getMarkDistance(frame.user, leg) / BOAT_LENGTH_PX;
+  const isAtMark = markDistance <= MARK_REACH_RADIUS_PX / BOAT_LENGTH_PX;
 
   return (
-    <section className="course-board" aria-label="コース上の自艇と相手艇">
+    <section className={isAtMark ? "course-board course-board--at-mark" : "course-board"} aria-label="コース上の自艇と相手艇">
       <div className="course-board__readout">
         <span className="readout-label">相手との差</span>
         <strong className={gain >= 0 ? "gain-positive" : "gain-negative"}>
           {gain >= 0 ? "+" : ""}
           {gain.toFixed(1)}艇身
         </strong>
+        <small>マークまで {markDistance.toFixed(1)}艇身</small>
       </div>
 
       <svg className="course-map" viewBox="0 0 550 560" role="img" aria-labelledby="course-title course-desc">
@@ -100,6 +107,7 @@ export function CourseBoard({
         </g>
 
         <g className="course-mark" transform={`translate(275 ${leg === "upwind" ? 45 : 515})`}>
+          <circle className="mark-reach-zone" cx="0" cy="0" r="42" />
           <path d={leg === "upwind" ? "M 0 -19 L 17 14 L -17 14 Z" : "M 0 19 L 17 -14 L -17 -14 Z"} />
           <line
             x1="-27"

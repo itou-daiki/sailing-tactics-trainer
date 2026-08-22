@@ -1,14 +1,14 @@
-import { getWindAngle, SCENARIO_DURATION } from "../domain/simulation";
+import { getWindAngle } from "../domain/simulation";
 
-export function WindStrip({ time }: { time: number }) {
+export function WindStrip({ time, duration }: { time: number; duration: number }) {
   const angle = getWindAngle(time);
   const status = angle === 0 ? "平均風向" : angle >= 9.5 ? "右振れ 最大" : time <= 16 ? "右へ振れている" : "平均へ戻っている";
-  const points = Array.from({ length: SCENARIO_DURATION + 1 }, (_, index) => {
-    const x = (index / SCENARIO_DURATION) * 260;
+  const points = Array.from({ length: duration + 1 }, (_, index) => {
+    const x = (index / duration) * 260;
     const y = 36 - getWindAngle(index) * 2.4;
     return `${x},${y}`;
   }).join(" ");
-  const cursorX = (time / SCENARIO_DURATION) * 260;
+  const cursorX = (time / duration) * 260;
 
   return (
     <section className="wind-strip" aria-label="風向の変化">

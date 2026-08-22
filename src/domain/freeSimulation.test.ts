@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FREE_CONFIG,
-  FREE_SCENARIO_DURATION,
+  FREE_SCENARIO_MAX_DURATION,
   getFreeWindAngle,
   getOpponentManeuverTimes,
   runFreeScenario,
@@ -32,7 +32,8 @@ describe("フリーシミュレーション", () => {
   it("複数回のタックを航跡とロスへ反映する", () => {
     const replay = runFreeScenario(config({ opponentMode: "hold" }), [8, 20]);
 
-    expect(replay.frames).toHaveLength(FREE_SCENARIO_DURATION + 1);
+    expect(replay.frames).toHaveLength(replay.endTime + 1);
+    expect(replay.endTime).toBeLessThanOrEqual(FREE_SCENARIO_MAX_DURATION);
     expect(replay.frames[7].user.tack).toBe("port");
     expect(replay.frames[8].user.tack).toBe("starboard");
     expect(replay.frames[20].user.tack).toBe("port");
@@ -56,5 +57,35 @@ describe("フリーシミュレーション", () => {
 
     expect(upwind.frames[10].relativeGain).toBeGreaterThan(0);
     expect(downwind.frames[10].relativeGain).toBeLessThan(0);
+  });
+
+  it("適切な操作時刻を選べば、上りも下りもマークへ到達できる", () => {
+    for (const leg of ["upwind", "downwind"] as const) {
+      const successfulTime = Array.from({ length: 51 }, (_, time) => time).find((time) =>
+        runFreeScenario(config({ leg, opponentMode: "hold" }), [time]).markResult === "reached"
+      );
+      expect(successfulTime).toBeDefined();
+    }
+  });
+
+  it("設定範囲を走査しても、終了時刻と全フレームは有限範囲に収まる", () => {
+    for (const leg of ["upwind", "downwind"] as const) {
+      for (const shiftAngle of [-18, 0, 18]) {
+        for (const windPattern of ["hold", "return", "return-past"] as const) {
+          const replay = runFreeScenario(config({ leg, shiftAngle, windPattern }), [12, 28]);
+          expect(replay.endTime).toBeLessThanOrEqual(FREE_SCENARIO_MAX_DURATION);
+          expect(replay.frames).toHaveLength(replay.endTime + 1);
+          expect(replay.frames.every((frame) => [
+            frame.windAngle,
+            frame.user.x,
+            frame.user.y,
+            frame.opponent.x,
+            frame.opponent.y,
+            frame.relativeGain,
+            frame.leverage,
+          ].every(Number.isFinite))).toBe(true);
+        }
+      }
+    }
   });
 });

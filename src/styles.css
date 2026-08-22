@@ -89,6 +89,7 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .course-board { position: relative; background: var(--sea); overflow: hidden; }
 .course-board__readout { position: absolute; z-index: 2; top: 12px; right: 12px; padding: 8px 10px; color: var(--ink); background: rgba(247, 247, 243, .92); border: 1px solid var(--ink); }
 .course-board__readout strong { display: block; font: 800 1.25rem/1.1 "Arial Narrow", sans-serif; }
+.course-board__readout small { display: block; margin-top: 4px; color: var(--graphite); font-size: .58rem; font-weight: 800; white-space: nowrap; }
 .gain-positive { color: var(--good); }
 .gain-negative { color: var(--signal); }
 .course-map { display: block; width: 100%; max-height: 63vh; min-height: 390px; }
@@ -96,6 +97,8 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .chart-grid { stroke: rgba(14, 110, 138, .16); stroke-width: 1; }
 .ladder-rungs line { stroke: rgba(11, 42, 58, .25); stroke-width: 1.2; stroke-dasharray: 8 5; vector-effect: non-scaling-stroke; }
 .course-mark path { fill: var(--wind); stroke: var(--ink); stroke-width: 2; }
+.mark-reach-zone { fill: rgba(242, 201, 76, .12); stroke: var(--sea-deep); stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.course-board--at-mark .mark-reach-zone { fill: rgba(24, 115, 93, .16); stroke: var(--good); stroke-width: 3; }
 .course-mark line { stroke: var(--ink); stroke-width: 2; }
 .course-mark text, .mean-wind-axis text { fill: var(--ink); font-size: 10px; font-weight: 700; }
 .mean-wind-axis line { stroke: rgba(11, 42, 58, .28); stroke-width: 1; stroke-dasharray: 2 6; }
@@ -300,6 +303,11 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-result-number span { color: var(--graphite); font-size: .7rem; font-weight: 800; }
 .free-result-number strong { font: 800 1.75rem/1 "Arial Narrow", "BIZ UDPGothic", sans-serif; white-space: nowrap; }
 .free-result-explanation { margin: 12px 0 18px; }
+.free-mark-result { display: grid; gap: 5px; margin-bottom: 18px; padding: 13px 12px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); border-left: 7px solid var(--good); }
+.free-mark-result--missed, .free-mark-result--timeout { border-left-color: var(--signal); }
+.free-mark-result span { color: var(--graphite); font: 800 .6rem/1 "Arial Narrow", sans-serif; letter-spacing: .11em; }
+.free-mark-result strong { font-size: 1rem; }
+.free-mark-result small { color: var(--graphite); font-size: .67rem; font-weight: 800; }
 .free-live-data--replay { margin-top: 8px; }
 .free-coach-note { margin-bottom: 22px; }
 .free-replay-actions { display: grid; gap: 8px; }

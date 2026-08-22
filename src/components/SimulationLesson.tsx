@@ -6,7 +6,6 @@ import { WindStrip } from "./WindStrip";
 import {
   COACH_TACK_TIME,
   runScenario,
-  SCENARIO_DURATION,
   type ScenarioReplay,
 } from "../domain/simulation";
 import {
@@ -19,6 +18,7 @@ import {
 type Phase = "predict" | "playing" | "replay";
 
 const getPlayPrompt = (time: number, hasTacked: boolean) => {
+  if (time >= 34) return "判断区間は終了。最終レグを走り、風上マークまで航跡をつなぎます。";
   if (hasTacked) return "タック完了。風が戻るまで、相手との差を見てください。";
   if (time < 4) return "まずは横の距離と、相手の位置を確認。";
   if (time < 10) return "右へ振れています。タックする？ もう少し見る？";
@@ -107,6 +107,10 @@ function ResultSummary({
             {finalGain >= 0 ? "+" : ""}{finalGain.toFixed(1)}艇身
           </dd>
         </div>
+        <div>
+          <dt>{replay.markResult === "reached" ? "風上マーク到達" : "マーク通過"}</dt>
+          <dd>{replay.endTime}秒{replay.markResult === "reached" ? "" : "（未到達）"}</dd>
+        </div>
       </dl>
 
       {prediction.evaluation.showScaffold ? (
@@ -164,13 +168,13 @@ export function SimulationLesson({
 
   useEffect(() => {
     if (phase !== "playing" || isPaused) return;
-    if (time >= SCENARIO_DURATION) {
+    if (time >= replay.endTime) {
       setPhase("replay");
       return;
     }
     const timer = window.setTimeout(() => setTime((current) => current + 1), 720);
     return () => window.clearTimeout(timer);
-  }, [phase, time, isPaused]);
+  }, [phase, time, isPaused, replay.endTime]);
 
   useEffect(() => {
     if (phase !== "replay" || !prediction || recorded) return;
@@ -208,12 +212,6 @@ export function SimulationLesson({
     setDidChooseTack(true);
   };
 
-  const finishNow = () => {
-    setTime(SCENARIO_DURATION);
-    setIsPaused(false);
-    setPhase("replay");
-  };
-
   const currentFrame = replay.frames[time];
 
   return (
@@ -226,7 +224,7 @@ export function SimulationLesson({
         <p>{lesson.summary}</p>
       </section>
 
-      <WindStrip time={time} />
+      <WindStrip time={time} duration={replay.endTime} />
 
       <div className="workspace">
         <div className="workspace__course">
@@ -252,7 +250,6 @@ export function SimulationLesson({
                 <span>{didChooseTack ? "タック済み" : "今、タック"}</span>
                 <small>{didChooseTack ? `${userTackTime}秒で実行` : "TACK NOW"}</small>
               </button>
-              <button type="button" className="text-action" onClick={finishNow}>リプレイへ進む</button>
             </div>
           ) : null}
         </div>
@@ -265,7 +262,7 @@ export function SimulationLesson({
                 <div><dt>艇</dt><dd>同じ速さの420</dd></div>
                 <div><dt>横の距離</dt><dd>12艇身</dd></div>
                 <div><dt>操作</dt><dd>タックは1回</dd></div>
-                <div><dt>目標</dt><dd>相手より前をクロス</dd></div>
+                <div><dt>目標</dt><dd>前をクロスし、マークまで走る</dd></div>
               </dl>
             </div>
           ) : null}

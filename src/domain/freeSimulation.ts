@@ -1,14 +1,19 @@
 import {
   BOAT_LENGTH_PX,
+  DOWNWIND_MARK,
   getLeverage,
+  getMarkDistance,
   getRelativeGain,
+  MARK_REACH_RADIUS_PX,
+  UPWIND_MARK,
   type Frame,
   type Point,
+  type MarkResult,
   type ScenarioEvent,
   type Tack,
 } from "./simulation";
 
-export const FREE_SCENARIO_DURATION = 36;
+export const FREE_SCENARIO_MAX_DURATION = 120;
 
 export type CourseLeg = "upwind" | "downwind";
 export type WindPattern = "hold" | "return" | "return-past";
@@ -33,6 +38,9 @@ export interface FreeScenarioReplay {
   gainChange: number;
   maxRelativeGain: number;
   minRelativeGain: number;
+  endTime: number;
+  markResult: MarkResult;
+  markDistance: number;
 }
 
 export const DEFAULT_FREE_CONFIG: FreeScenarioConfig = {
@@ -50,11 +58,11 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 
 const normalizeManeuverTimes = (times: number[]) =>
   [...new Set(times.map((time) => Math.round(time)))]
-    .filter((time) => time >= 0 && time <= FREE_SCENARIO_DURATION)
+    .filter((time) => time >= 0 && time <= FREE_SCENARIO_MAX_DURATION)
     .sort((a, b) => a - b);
 
 export function getFreeWindAngle(time: number, config: FreeScenarioConfig): number {
-  const safeTime = clamp(time, 0, FREE_SCENARIO_DURATION);
+  const safeTime = clamp(time, 0, FREE_SCENARIO_MAX_DURATION);
   if (safeTime <= 4) return 0;
   if (safeTime < 10) return ((safeTime - 4) / 6) * config.shiftAngle;
   if (config.windPattern === "hold" || safeTime <= 16) return config.shiftAngle;
@@ -135,8 +143,10 @@ export function runFreeScenario(
   let userManeuverLoss = 0;
   let opponentManeuverLoss = 0;
   const frames: Frame[] = [];
+  let markResult: MarkResult = "timeout";
+  const mark = config.leg === "upwind" ? UPWIND_MARK : DOWNWIND_MARK;
 
-  for (let time = 0; time <= FREE_SCENARIO_DURATION; time += 1) {
+  for (let time = 0; time <= FREE_SCENARIO_MAX_DURATION; time += 1) {
     const windAngle = getFreeWindAngle(time, config);
     const userTack = getTack(time, userManeuverTimes);
     const opponentTack = getTack(time, opponentManeuverTimes);
@@ -158,6 +168,19 @@ export function runFreeScenario(
       relativeGain: getLegRelativeGain(userPosition, opponentPosition, windAngle, config.leg),
       leverage: getLeverage(userPosition, opponentPosition, windAngle),
     });
+
+    const markDistance = getMarkDistance(userPosition, config.leg);
+    const crossedMarkLine = config.leg === "upwind"
+      ? userPosition.y >= mark.y
+      : userPosition.y <= mark.y;
+    if (markDistance <= MARK_REACH_RADIUS_PX) {
+      markResult = "reached";
+      break;
+    }
+    if (crossedMarkLine) {
+      markResult = markDistance <= MARK_REACH_RADIUS_PX ? "reached" : "missed";
+      break;
+    }
 
     userManeuverLoss += baseSpeed - userSpeed;
     opponentManeuverLoss += baseSpeed - opponentSpeed;
@@ -194,6 +217,16 @@ export function runFreeScenario(
   for (const time of opponentManeuverTimes) {
     events.push({ time, kind: "opponent-tack", label: `相手が${maneuver}` });
   }
+  const finalFrame = frames[frames.length - 1];
+  events.push({
+    time: finalFrame.time,
+    kind: "finish",
+    label: markResult === "reached"
+      ? `${config.leg === "upwind" ? "風上" : "風下"}マークに到達`
+      : markResult === "missed"
+        ? "マークを外して通過"
+        : "制限時間で終了",
+  });
   events.sort((a, b) => a.time - b.time);
 
   const gains = frames.map((frame) => frame.relativeGain / BOAT_LENGTH_PX);
@@ -211,5 +244,8 @@ export function runFreeScenario(
     gainChange: finalRelativeGain - firstGain,
     maxRelativeGain: Math.max(...gains),
     minRelativeGain: Math.min(...gains),
+    endTime: finalFrame.time,
+    markResult,
+    markDistance: getMarkDistance(finalFrame.user, config.leg) / BOAT_LENGTH_PX,
   };
 }

@@ -3,7 +3,6 @@ import { CourseBoard, type CourseComparison } from "./CourseBoard";
 import { BOAT_LENGTH_PX } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
-  FREE_SCENARIO_DURATION,
   runFreeScenario,
   type CourseLeg,
   type FreeScenarioConfig,
@@ -125,8 +124,9 @@ function FreeWindStrip({
   windAngles: number[];
 }) {
   const angle = windAngles[time] ?? 0;
+  const duration = Math.max(1, windAngles.length - 1);
   const points = windAngles
-    .map((value, index) => `${(index / FREE_SCENARIO_DURATION) * 100},${24 - value * 1.05}`)
+    .map((value, index) => `${(index / duration) * 100},${24 - value * 1.05}`)
     .join(" ");
   return (
     <section className="free-wind-strip" aria-label="現在の海面設定と風向">
@@ -139,7 +139,7 @@ function FreeWindStrip({
         <svg viewBox="0 0 100 48" preserveAspectRatio="none" role="img" aria-label="風向変化の予定線">
           <line x1="0" y1="24" x2="100" y2="24" />
           <polyline points={points} />
-          <line className="free-wind-cursor" x1={(time / FREE_SCENARIO_DURATION) * 100} y1="2" x2={(time / FREE_SCENARIO_DURATION) * 100} y2="46" />
+          <line className="free-wind-cursor" x1={(time / duration) * 100} y1="2" x2={(time / duration) * 100} y2="46" />
         </svg>
       </div>
       <dl className="free-wind-strip__facts">
@@ -264,13 +264,13 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (phase !== "playing" || isPaused) return;
-    if (time >= FREE_SCENARIO_DURATION) {
+    if (time >= replay.endTime) {
       setPhase("replay");
       return;
     }
     const timer = window.setTimeout(() => setTime((current) => current + 1), 720);
     return () => window.clearTimeout(timer);
-  }, [isPaused, phase, time]);
+  }, [isPaused, phase, replay.endTime, time]);
 
   const start = (config = draftConfig) => {
     setActiveConfig({ ...config });
@@ -284,12 +284,6 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     const lastTime = userManeuverTimes[userManeuverTimes.length - 1] ?? -10;
     if (time < 1 || time - lastTime < 4) return;
     setUserManeuverTimes((current) => [...current, time]);
-  };
-
-  const finish = () => {
-    setTime(FREE_SCENARIO_DURATION);
-    setIsPaused(false);
-    setPhase("replay");
   };
 
   const changeConditions = () => {
@@ -344,7 +338,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <span>今、{maneuverLabel}</span>
                 <small>{userManeuverTimes.length}回実行</small>
               </button>
-              <button type="button" className="text-action" onClick={finish}>リプレイへ進む</button>
+              <button type="button" className="text-action" onClick={changeConditions}>中止して条件を変える</button>
             </div>
           ) : null}
         </div>
@@ -375,6 +369,17 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
             <section className="free-replay" aria-labelledby="free-replay-heading">
               <div className="section-kicker">COMPARE / 操作なしと比べる</div>
               <h2 id="free-replay-heading">何が差をつくった？</h2>
+              <div className={`free-mark-result free-mark-result--${replay.markResult}`}>
+                <span>{replay.markResult === "reached" ? "MARK REACHED" : replay.markResult === "missed" ? "MARK MISSED" : "TIME LIMIT"}</span>
+                <strong>
+                  {replay.markResult === "reached"
+                    ? `${activeConfig.leg === "upwind" ? "風上" : "風下"}マークに到達`
+                    : replay.markResult === "missed"
+                      ? "マークを外して通過"
+                      : "制限時間で終了"}
+                </strong>
+                <small>{replay.endTime}秒　｜　マークとの距離 {replay.markDistance.toFixed(1)}艇身</small>
+              </div>
               <div className="free-result-number">
                 <span>自艇操作なしとの差</span>
                 <strong className={choiceGain >= 0 ? "gain-positive" : "gain-negative"}>
@@ -395,7 +400,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 className="timeline-slider"
                 type="range"
                 min="0"
-                max={FREE_SCENARIO_DURATION}
+                max={replay.endTime}
                 step="1"
                 value={time}
                 aria-label="フリーシミュレーションのリプレイ時刻"

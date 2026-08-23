@@ -22,6 +22,10 @@
 | [World Sailing Level 2 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel2TechnicalCourseSyllabus-%5B18133%5D.pdf) | 目的、学習成果、陸上ドリル、対話型理論、recap/debrief、映像資源を組み合わせる | 各プリセットに「何を見る練習か」を明記し、結果だけで終わらせない |
 | [International 420 Class online training resource](https://www.sailing.org/2015/05/05/international-420-class-launches-new-online-training-resource/) | 420向けExercise e-Bookは、選んだ練習を段階化し、目的、必要物、評価、動画・アニメーション、debrief notes、progress benchmarkをまとめている | 420専用ドリルと振り返り問いを製品の中心に置く |
 | [World Sailing Racing Rules](https://www.sailing.org/inside-world-sailing/rules-regulations/racingrules/) / [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | 現行ルールは2025–2028版。Rule 10ではポート艇がスターボード艇を避け、Rule 13ではタック中の艇がクローズホールドになるまで他艇を避け続ける | 「前後ゲインがプラスならベア」とは解釈しない。ミートを早期予測し、タック中も避けられる時間があれば先にタック、安全余地がない場合だけベアする |
+| [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | Rule 26は予告5分、準備4分、1分、スタート0分の信号系列。Rule 29.1はスタート時にコース側の艇があればX旗で個別リコールを知らせる。Rule 18のゾーンは艇長3艇身 | RACE LABを最後の60秒から開始して既に進行中の信号系列を見せ、スタート時のライン越えをX旗とリプレイに残す。上マークは3艇身ゾーンを可視化する |
+| [World Sailing Race Management Manual](https://www.sailing.org/tools/documents/RaceManagementManualJuly2019-%5B25256%5D.pdf) | レース運営では、風と潮流に合わせたコース調整、スタート手順、風上・風下コースやオリンピック・トラペゾイドの設営を扱う | マークだけの抽象画面ではなく、RC艇、ピン、スタートライン、風向、潮流、風上マークを一つの海面として読む。ただし初版は第1上マークまでに絞る |
+| [2024 International 420 Asian & Oceanian Championships Sailing Instructions](https://2024aoc.420sailing.org/uploaded_files/Document_92518_20240428110051_en.pdf) | 予告信号時までにコースと第1レグのコンパス方位を示し、オレンジ旗の間をスタートラインとする。マーク1、2、3s/p、4s/pを使うコースと、45分のターゲットタイムを定める | 420のレース画面にはコース情報、RC艇、ピン、上マークを置く。全コースを薄く再現せず、最初の実践課題をスタートからMark 1までと明示する |
+| [2025 International 420 North American Championships Sailing Instructions](https://www.regattanetwork.com/clubmgmt/regatta_uploads/28946/I420.2025.SI.pdf) | RRS 26によるスタート、RC艇とピン、コース方位・距離、OCS艇の通知、マーク・フィニッシュ、45分のターゲットタイムを規定する | 大会ごとのSIで詳細が変わることを前提に、RACE LABは共通して読める信号・ライン・第1レグに限定する。OCS音声通知などを普遍的ルールとは扱わない |
 | [US Sailing Match Racing Quiz — Black Diamond](https://www.ussailing.org/wp-content/uploads/2021/07/Match-Racing-Quiz-Black-Diamond-July-2021-Answers.pdf) | 反対タックで収束する場面について、相手のラインへ達する直前のタックや、相手の反応を見越した早い判断を具体例で扱う | ミート地点で反応するAIではなく、収束を予測して数秒前に判断するAIにする |
 | [North U: Upwind Tactics One on One](https://www.northsails.com/en-us/blogs/north-sails-blog/north-u-upwind-tactics-one-on-one-bill-gladstone) | レイライン付近の1対1でも、lee-bow、cross & tack、継続、delayed tackという複数の選択肢がある | 単一の「正解」を規則から演繹しない。今回は初心者向け基本反応を実装し、発展戦術は別ドリルに分ける |
 | [Sailing World: Controlling the Cross](https://www.sailingworld.com/how-to/controlling-the-cross/) | ポート艇にはcross、duck、lee-bowがあり、ダックは右側へ進み続けたい戦略では有効だが距離を失う。遅い判断はリスクを上げる | ベアを「前にいるから」ではなく、「タックを安全に完了する時間が残らない」近距離の回避として扱う |
@@ -66,6 +70,14 @@
 - 現段階では判断の因果を見やすくする教育用パラメータであり、420選手・コーチによる実艇データとシナリオ評価で校正する。
 - ダック、lee-bow、cross & tackの選択は風の戦略、艇速差、波、潮、フリート位置で変わる。基本AIにすべてを混ぜず、発展ドリルとして段階的に追加する。
 
+### 「実際のレース環境」を扱う際に抑えた過剰主張
+
+- 実装したのは、スタート60秒前から第1上マークまでに選手が読む主要情報を圧縮した教育用シナリオであり、実海面そのものの再現ではない。
+- 信号時刻、X旗、ポート／スターボード、3艇身ゾーンの根拠はRRSに置く。一方、艇速、タックロス、潮流、風圧帯、ダーティーエア、相手艇の意思決定は公式420ポーラではなく教育用パラメータである。
+- RRS 10／18の表示は「ここをリプレイで確認する」という注意喚起に限定する。オーバーラップ、マークルームの権利、接触、ペナルティー、抗議審問を自動判定しない。
+- 大会ごとに帆走指示書、コース、信号、OCS通知方法は変わる。現地では必ずその大会のNOR／SIを優先する。
+- 波、艇ごとの速度差、クルーワーク、視界、疲労、通信の失敗は未再現であり、アプリの好結果が実艇での安全や順位を保証するものではない。
+
 ## 実装した優先事項
 
 1. 目的が分かる4つの420向けコーチドリルを、自由設定より先に置く。
@@ -75,6 +87,9 @@
 5. Web Shareが使えない端末ではClipboard、さらに失敗した場合は手動コピーへ段階的に戻す。
 6. 相手艇はミートを12秒先まで予測し、安全にタックを完了できる場合はミート前にタックする。
 7. リプレイに「MEET CHECK」を置き、予測秒数と安全余裕から相手の判断を自己説明する。
+8. RACE LABを追加し、8艇のスタートから第1上マークまで、信号、ライン有利側、潮流、風圧帯、振れ戻り、ダーティーエアを同時に読む。
+9. 個別リコール後はライン下へ戻って再スタートする操作を求め、RRS 10の注意場面、3艇身ゾーン進入とともにリプレイイベントとして残す。
+10. 順位だけでなく、クリーンエア率、リフト側を走れた割合、スタートからMark 1までの順位増減を示し、クルーへ伝える短い言葉へ変換する。
 
 ## 独自ポジション
 
@@ -91,6 +106,9 @@ SHIFTは、GPS解析製品や大画面向け総合シミュレーターの縮小
 - 320px幅で、プリセット選択からスタートまで迷わず進めるか
 - チーム内で、操作なし・自分・前後4秒の3航跡を説明に使えるか
 - 次段階として、端末内の試行記録を書き出す価値があるか
+- スタート前の声かけを入力してから走ることで、実艇のヘルム／クルー間の共有が具体的になるか
+- RRS 10／18の注意表示が、規則の誤学習を生まずに「SIとルールブックで確認する」行動へつながるか
+- 8艇を表示しても、390px幅で自艇、次の危険、マークまでの意図を迷わず読めるか
 
 ## 調査上の制約
 

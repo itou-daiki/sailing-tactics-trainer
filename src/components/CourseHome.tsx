@@ -10,10 +10,12 @@ export function CourseHome({
   progress,
   onOpenLesson,
   onOpenFreeSimulation,
+  onOpenRaceSimulation,
 }: {
   progress: CourseProgress;
   onOpenLesson: (lessonId: LessonId) => void;
   onOpenFreeSimulation: () => void;
+  onOpenRaceSimulation: () => void;
 }) {
   const completed = getCompletedCount(progress);
   const recommendedId = getRecommendedLessonId(progress);
@@ -28,6 +30,25 @@ export function CourseHome({
           レース中の3秒を、陸で何度でも練習する。答えを覚えるのではなく、
           風向・横の距離・相手の動きから理由を説明できる状態を目指します。
         </p>
+      </section>
+
+      <section className="race-launch" aria-labelledby="race-launch-title">
+        <div className="race-launch__signal" aria-hidden="true">
+          <span>−1:00</span>
+          <i />
+        </div>
+        <div className="race-launch__copy">
+          <div className="section-kicker">RACE LAB / 実戦モード</div>
+          <h2 id="race-launch-title">艇団でスタートする</h2>
+          <p>本部艇、ピン、潮、ブロー、8艇の位置関係を再現。残り60秒から第1上マークまで判断を続けます。</p>
+        </div>
+        <div className="race-launch__meta">
+          <span>RRS 26</span>
+          <span>START → MARK 1</span>
+        </div>
+        <button type="button" onClick={onOpenRaceSimulation}>
+          実戦へ出る <span aria-hidden="true">→</span>
+        </button>
       </section>
 
       <section className="free-launch" aria-labelledby="free-launch-title">

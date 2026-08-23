@@ -499,6 +499,151 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .result-actions { display: grid; gap: 8px; }
 .result-actions .secondary-action { width: 100%; }
 
+/* Race Lab — race-committee signal board meets a wet chart table. */
+.race-launch { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 14px 16px; align-items: center; margin: 8px 0 20px; padding: 20px 0; border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.race-launch__signal { align-self: stretch; display: grid; place-items: center; align-content: center; gap: 7px; border-right: 1px solid var(--ink); font: 800 .72rem/1 "Arial Narrow", sans-serif; }
+.race-launch__signal i { position: relative; display: block; width: 31px; height: 31px; border: 2px solid var(--ink); background: var(--sea-deep); transform: rotate(2deg); }
+.race-launch__signal i::after { content: ""; position: absolute; inset: 8px; background: var(--sail); }
+.race-launch__copy h2 { margin: 6px 0 7px; font-size: 1.45rem; }
+.race-launch__copy p { margin: 0; color: var(--graphite); font-size: .76rem; line-height: 1.65; }
+.race-launch__meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
+.race-launch__meta span { padding: 4px 7px; border: 1px solid var(--ink); font: 800 .58rem/1 "Arial Narrow", sans-serif; letter-spacing: .04em; }
+.race-launch button { grid-column: 1 / -1; min-height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border: 2px solid var(--ink); color: var(--sail); background: var(--sea-deep); font-weight: 800; cursor: pointer; }
+
+.race-mode { padding: 28px 0 10px; }
+.race-setup { max-width: 980px; margin: 0 auto; }
+.race-setup h1, .race-live-heading h1 { margin: 8px 0 0; font-size: clamp(2.8rem, 11vw, 6rem); }
+.race-setup__lead { max-width: 47rem; margin: 18px 0 25px; color: var(--graphite); font-size: .88rem; line-height: 1.85; }
+.race-briefing { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 12px; margin-bottom: 28px; border: 2px solid var(--ink); border-top-width: 5px; }
+.race-briefing__flag { display: grid; place-items: center; min-height: 94px; color: var(--sail); background: var(--ink); font: 800 1rem/1 "Arial Narrow", sans-serif; letter-spacing: .08em; }
+.race-briefing > div:nth-child(2) { align-self: center; padding: 10px 10px 10px 0; }
+.race-briefing > div:nth-child(2) span { color: var(--sea-deep); font: 800 .57rem/1 "Arial Narrow", sans-serif; letter-spacing: .08em; }
+.race-briefing > div:nth-child(2) strong { display: block; margin-top: 5px; font-size: 1.05rem; }
+.race-briefing > div:nth-child(2) p { margin: 5px 0 0; color: var(--graphite); font-size: .68rem; line-height: 1.5; }
+.race-briefing dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border-top: 1px solid var(--ink); }
+.race-briefing dl div { min-width: 0; padding: 9px 8px; border-right: 1px solid var(--rule); }
+.race-briefing dl div:last-child { border-right: 0; }
+.race-briefing dt { color: var(--graphite); font-size: .54rem; font-weight: 800; }
+.race-briefing dd { overflow: hidden; margin: 4px 0 0; font: 800 .64rem/1.2 "Arial Narrow", "BIZ UDPGothic", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.race-choice { margin: 0; padding: 17px 0; border: 0; border-top: 1px solid var(--ink); }
+.race-choice legend { padding-right: 9px; font-size: .76rem; font-weight: 800; }
+.race-condition-list, .race-plan-grid { display: grid; gap: 6px; margin-top: 8px; }
+.race-condition-list button, .race-plan-grid button { min-height: 62px; padding: 10px 11px; border: 1px solid var(--rule); color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.race-condition-list button strong, .race-condition-list button span, .race-plan-grid button strong, .race-plan-grid button span { display: block; }
+.race-condition-list button strong, .race-plan-grid button strong { font-size: .74rem; }
+.race-condition-list button span, .race-plan-grid button span { margin-top: 5px; color: var(--graphite); font-size: .6rem; line-height: 1.4; }
+.race-condition-list button.is-selected, .race-plan-grid button.is-selected { border: 2px solid var(--ink); background: rgba(215, 233, 234, .55); box-shadow: inset 5px 0 0 var(--sea-deep); }
+.race-plan-grid { grid-template-columns: repeat(3, 1fr); }
+.race-transfer-note { margin: 16px 0; padding: 14px 14px 14px 17px; border-left: 6px solid var(--wind); background: #fffef5; }
+.race-transfer-note strong { font-size: .7rem; }
+.race-transfer-note p { margin: 5px 0; color: var(--graphite); font-size: .72rem; line-height: 1.65; }
+.race-transfer-note span { display: block; padding-top: 7px; border-top: 1px solid var(--rule); font-size: .7rem; font-weight: 800; line-height: 1.55; }
+.race-start-action { width: 100%; min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border: 2px solid var(--ink); color: var(--sail); background: var(--signal); font-weight: 800; cursor: pointer; }
+.race-model-note { margin: 10px 0 0; color: var(--graphite); font-size: .62rem; line-height: 1.6; }
+
+.race-mode--active { padding-top: 20px; }
+.race-live-heading { display: grid; gap: 18px; align-items: end; padding-bottom: 20px; }
+.race-signal-board { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.race-signal-board > div { min-width: 0; padding: 8px 5px; border-right: 1px solid var(--rule); color: var(--graphite); }
+.race-signal-board > div:last-child { border-right: 0; }
+.race-signal-board span, .race-signal-board strong, .race-signal-board small { display: block; }
+.race-signal-board span { font: 800 .56rem/1 "Arial Narrow", sans-serif; }
+.race-signal-board strong { margin: 6px 0 4px; color: var(--ink); font: 800 .72rem/1 "Arial Narrow", sans-serif; }
+.race-signal-board small { font-size: .52rem; }
+.race-signal-board .is-past { color: var(--ink); background: var(--wind); }
+.race-workspace { display: grid; border-top: 3px solid var(--ink); border-bottom: 2px solid var(--ink); }
+.race-board { position: relative; min-width: 0; background: var(--sea); }
+.race-board__status { position: absolute; z-index: 2; top: 10px; right: 10px; max-width: 138px; padding: 8px 9px; border: 1px solid var(--ink); color: var(--ink); background: rgba(247, 247, 243, .94); }
+.race-board__status span, .race-board__status strong { display: block; }
+.race-board__status span { font-size: .55rem; font-weight: 800; line-height: 1.35; }
+.race-board__status strong { margin: 3px 0; font: 800 1.05rem/1 "Arial Narrow", sans-serif; }
+.race-board__chart { display: block; width: 100%; min-height: 520px; max-height: 76vh; }
+.race-water { fill: var(--sea); }
+.race-grid path { stroke: rgba(14, 110, 138, .13); stroke-width: .25; }
+.race-gust path { fill: rgba(242, 201, 76, .32); stroke: #8a6900; stroke-width: .45; stroke-dasharray: 2 1; }
+.race-gust text, .race-current text, .race-mark-zone text, .race-start-line text, .race-wind-arrow text { fill: var(--ink); font-size: 2.2px; font-weight: 800; letter-spacing: .05em; }
+.race-current line { stroke: var(--sea-deep); stroke-width: .55; opacity: .7; }
+.race-current marker path { fill: var(--sea-deep); }
+.race-mark-zone > circle:first-child { fill: rgba(242, 201, 76, .12); stroke: var(--signal); stroke-width: .5; stroke-dasharray: 1.2 1; }
+.race-mark { fill: var(--wind); stroke: var(--ink); stroke-width: .55; }
+.race-start-line > line { stroke: var(--signal); stroke-width: .65; stroke-dasharray: 1.5 1; }
+.race-start-line circle { fill: var(--signal); stroke: var(--ink); stroke-width: .4; }
+.race-start-line path { fill: var(--sail); stroke: var(--ink); stroke-width: .5; }
+.race-start-line .race-committee-mast { stroke: var(--ink); stroke-width: .45; }
+.race-track { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.race-track--user { stroke: var(--signal); stroke-width: .8; }
+.race-boat path { stroke: var(--ink); stroke-width: .45; }
+.race-boat line { stroke: var(--ink); stroke-width: .35; }
+.race-boat--fleet path { fill: var(--sail); }
+.race-boat--user path { fill: var(--signal); }
+.race-wind-arrow line, .race-wind-arrow path { fill: none; stroke: var(--signal); stroke-width: .75; }
+.race-board__legend { display: flex; flex-wrap: wrap; gap: 9px 13px; min-height: 42px; padding: 10px 11px; border-top: 1px solid var(--ink); background: var(--sail); font-size: .59rem; font-weight: 800; }
+.race-board__legend span { display: flex; align-items: center; gap: 5px; }
+.race-board__legend i { width: 16px; height: 6px; border: 1px solid var(--ink); }
+.race-board__legend .is-user { background: var(--signal); }
+.race-board__legend .is-fleet { background: var(--sail); }
+.race-board__legend .is-pressure { border-color: #8a6900; background: var(--wind); }
+.race-board__legend .is-zone { border-color: var(--signal); border-style: dashed; }
+.race-console { min-width: 0; padding: 20px 2px 24px; border-top: 2px solid var(--ink); }
+.race-console__clock { display: grid; grid-template-columns: 1fr auto; align-items: end; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
+.race-console__clock span { color: var(--sea-deep); font: 800 .62rem/1 "Arial Narrow", sans-serif; letter-spacing: .1em; }
+.race-console__clock strong { grid-column: 2; grid-row: 1 / span 2; font: 800 2.1rem/1 "Arial Narrow", sans-serif; }
+.race-console__clock small { margin-top: 6px; font-size: .6rem; font-weight: 800; }
+.race-live-call { min-height: 76px; margin: 0; padding: 14px 4px; border-bottom: 1px solid var(--ink); font-size: .78rem; font-weight: 800; line-height: 1.7; }
+.race-controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin: 12px 0; }
+.race-controls button { min-height: 64px; padding: 8px 9px; border: 1px solid var(--ink); color: var(--ink); background: var(--sail); text-align: left; cursor: pointer; }
+.race-controls button strong, .race-controls button span { display: block; }
+.race-controls button strong { font-size: .78rem; }
+.race-controls button span { margin-top: 4px; color: var(--graphite); font-size: .56rem; }
+.race-controls button.is-primary { color: var(--sail); background: var(--signal); }
+.race-controls button.is-primary span { color: var(--sail); }
+.race-controls button.is-recall { border: 2px solid var(--signal); background: var(--wind); }
+.race-controls button.is-tack { color: var(--sail); background: var(--sea-deep); }
+.race-controls button.is-tack span { color: var(--sail); }
+.race-transport { display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px; }
+.race-transport > button, .race-transport div button { min-height: 44px; border: 1px solid var(--rule); color: var(--ink); background: transparent; font-size: .65rem; font-weight: 800; cursor: pointer; }
+.race-transport div { display: grid; grid-template-columns: repeat(3, 1fr); }
+.race-transport div button { border-right: 0; }
+.race-transport div button:last-child { border-right: 1px solid var(--rule); }
+.race-transport div button.is-active { color: var(--sail); background: var(--ink); }
+.race-live-facts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 18px 0 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.race-live-facts div { min-width: 0; padding: 9px 6px; border-right: 1px solid var(--rule); }
+.race-live-facts div:last-child { border-right: 0; }
+.race-live-facts dt { color: var(--graphite); font-size: .52rem; }
+.race-live-facts dd { overflow: hidden; margin: 4px 0 0; font-size: .61rem; font-weight: 800; line-height: 1.35; text-overflow: ellipsis; }
+.race-replay-range { display: grid; gap: 8px; margin: 15px 0; color: var(--graphite); font-size: .62rem; font-weight: 800; }
+.race-replay-range input { width: 100%; min-height: 44px; margin: 0; accent-color: var(--signal); }
+.race-replay-events { display: flex; gap: 5px; padding: 2px 0 11px; overflow-x: auto; scrollbar-width: thin; }
+.race-replay-events button { flex: 0 0 auto; min-height: 44px; max-width: 180px; padding: 7px 9px; border: 1px solid var(--rule); color: var(--ink); background: transparent; text-align: left; font-size: .58rem; line-height: 1.35; cursor: pointer; }
+.race-replay-events button span { display: block; margin-bottom: 3px; color: var(--sea-deep); font: 800 .58rem/1 "Arial Narrow", sans-serif; }
+.race-replay-events button.is-active { border: 2px solid var(--ink); background: var(--wind); }
+
+.race-debrief { padding: 32px 0 20px; border-bottom: 2px solid var(--ink); }
+.race-debrief h2 { margin: 7px 0 20px; font-size: 1.65rem; }
+.race-score-line { display: grid; grid-template-columns: 1fr 30px 1fr; align-items: stretch; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.race-score-line > div { padding: 13px 10px; }
+.race-score-line > div.is-alert { color: var(--signal); }
+.race-score-line span, .race-score-line strong, .race-score-line small { display: block; }
+.race-score-line span { font: 800 .58rem/1 "Arial Narrow", sans-serif; letter-spacing: .08em; }
+.race-score-line strong { margin: 6px 0 4px; font-size: 1.15rem; }
+.race-score-line small { color: var(--graphite); font-size: .6rem; }
+.race-score-line i { display: grid; place-items: center; border-right: 1px solid var(--rule); border-left: 1px solid var(--rule); font-style: normal; }
+.race-metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 18px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.race-metrics > div { min-width: 0; padding: 12px 8px; border-right: 1px solid var(--rule); }
+.race-metrics > div:last-child { border-right: 0; }
+.race-metrics span, .race-metrics strong, .race-metrics small { display: block; }
+.race-metrics span { min-height: 2.5em; color: var(--graphite); font-size: .57rem; line-height: 1.35; }
+.race-metrics strong { margin: 6px 0 4px; font: 800 1.2rem/1 "Arial Narrow", sans-serif; }
+.race-metrics small { color: var(--graphite); font-size: .52rem; line-height: 1.4; }
+.race-water-transfer { margin: 22px 0; padding: 15px 14px; border-left: 6px solid var(--wind); background: #fffef5; }
+.race-water-transfer > strong { font-size: .72rem; }
+.race-water-transfer ol { margin: 12px 0 0; padding: 0; list-style: none; }
+.race-water-transfer li { padding: 9px 0; border-top: 1px solid var(--rule); font-size: .68rem; font-weight: 700; line-height: 1.55; }
+.race-water-transfer li span { display: block; color: var(--sea-deep); font-size: .57rem; }
+.race-end-actions { display: grid; gap: 7px; }
+.race-end-actions button { min-height: 48px; border: 2px solid var(--ink); color: var(--ink); background: var(--sail); font-weight: 800; cursor: pointer; }
+.race-end-actions button:first-child { color: var(--sail); background: var(--signal); }
+
 @media (max-width: 419px) {
   .training-log__heading { flex-direction: column; align-items: flex-start; gap: 6px; }
   .free-action-dock { grid-template-columns: minmax(0, 1fr) 126px; }
@@ -532,6 +677,11 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
   .course-intro .section-kicker { grid-column: 1 / -1; }
   .course-intro h1 { margin-top: -8px; }
   .recommended-drill { grid-template-columns: 1fr 190px; align-items: center; padding: 30px 24px 24px; }
+  .race-launch { grid-template-columns: 82px minmax(0, 1fr) 170px 190px; gap: 20px; padding: 24px 0; }
+  .race-launch__signal { grid-row: 1; }
+  .race-launch__copy { grid-column: 2; }
+  .race-launch__meta { grid-column: 3; display: grid; align-content: center; }
+  .race-launch button { grid-column: 4; }
   .free-launch { grid-template-columns: 74px minmax(0, 1fr) 150px 190px; gap: 20px; padding: 24px 0; }
   .free-launch__mast { grid-row: 1; }
   .free-launch__copy { grid-column: 2; }
@@ -553,6 +703,11 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
   .free-action-dock { grid-template-columns: 1fr 100px 190px; padding: 14px; }
   .result-actions { grid-column: 1 / span 2; grid-template-columns: 1fr 1fr; }
   .result-actions .text-action { grid-column: 1 / -1; }
+  .race-condition-list { grid-template-columns: repeat(3, 1fr); }
+  .race-live-heading { grid-template-columns: minmax(0, 1fr) minmax(360px, .72fr); }
+  .race-workspace { grid-template-columns: minmax(0, 1.7fr) minmax(330px, .7fr); }
+  .race-console { padding: 24px 22px; border-top: 0; border-left: 2px solid var(--ink); }
+  .race-end-actions { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

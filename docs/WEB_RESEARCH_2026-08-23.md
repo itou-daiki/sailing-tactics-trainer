@@ -32,6 +32,8 @@
 | [US Sailing Match Racing Quiz — Black Diamond](https://www.ussailing.org/wp-content/uploads/2021/07/Match-Racing-Quiz-Black-Diamond-July-2021-Answers.pdf) | 反対タックで収束する場面について、相手のラインへ達する直前のタックや、相手の反応を見越した早い判断を具体例で扱う | ミート地点で反応するAIではなく、収束を予測して数秒前に判断するAIにする |
 | [North U: Upwind Tactics One on One](https://www.northsails.com/en-us/blogs/north-sails-blog/north-u-upwind-tactics-one-on-one-bill-gladstone) | レイライン付近の1対1でも、lee-bow、cross & tack、継続、delayed tackという複数の選択肢がある | 単一の「正解」を規則から演繹しない。今回は初心者向け基本反応を実装し、発展戦術は別ドリルに分ける |
 | [Sailing World: Controlling the Cross](https://www.sailingworld.com/how-to/controlling-the-cross/) | ポート艇にはcross、duck、lee-bowがあり、ダックは右側へ進み続けたい戦略では有効だが距離を失う。遅い判断はリスクを上げる | ベアを「前にいるから」ではなく、「タックを安全に完了する時間が残らない」近距離の回避として扱う |
+| [World Sailing Team Racing Umpire Manual](https://www.sailing.org/tools/documents/TRUMwebpagesFinal-%5B20252%5D.pdf) | 前の艇も後ろの艇も、位置を作れば風の影で相手を遅くできる。特にランでは後ろの艇も相手へ風の影を重ねられる | ブランケットを「前の艇が自動的に行う効果」にせず、自艇／相手のどちらが見かけの風の後流を重ねたかで判定する |
+| [Richards et al.: A Wind Tunnel Study of the Interaction Between Two Sailing Yachts](https://doi.org/10.5957/CSYS-2013-012) | 影の強い領域は真風ではなく見かけの風に沿う。後流中心では駆動力が大きく低下し、中心から横へ約1艇身外れるとほぼ自由流へ戻る。影響は最大10艇身との先行知見も整理している | SHIFT LABでは見かけの風ベクトルから後流を作り、中心・近距離ほど減速、横へ外れると回復させる。研究の駆動力低下を420の速度低下へ直結させず、最大28%を教育用仮定と明記する |
 
 ## 類似サービス・ゲームの比較
 
@@ -75,6 +77,7 @@
 - 12秒の予測範囲、4秒のタック回復、1秒の安全余裕は、420の公式ポーラや実測研究から得た値ではない。
 - 現段階では判断の因果を見やすくする教育用パラメータであり、420選手・コーチによる実艇データとシナリオ評価で校正する。
 - ダック、lee-bow、cross & tackの選択は風の戦略、艇速差、波、潮、フリート位置で変わる。基本AIにすべてを混ぜず、発展ドリルとして段階的に追加する。
+- ブランケットの後流方向と横幅は風洞研究を参考にしたが、最大28%の艇速低下、8艇身の計算上限、即時回復は420実艇データで校正していない。
 
 ### 「実際のレース環境」を扱う際に抑えた過剰主張
 
@@ -104,6 +107,7 @@
 16. 標準風を、右振れ・平均通過・左振れ・平均通過の連続波形へ変更する。
 17. ライブ中に `WIND MOVE → NOW → CALL` を表示し、風の変化方向、現在のタックの有利不利、維持／操作の根拠を言葉で結ぶ。
 18. 実行した全タック／ジャイブをPOINT LOGに残し、各1点だけを4秒早く・今回・4秒遅くした試走で比較する。
+19. 見かけの風に沿うブランケットを自艇／相手の双方へ作用させ、後流、瞬間減速率、影にいた秒数、艇身換算ロスをリプレイで説明する。
 
 ## 独自ポジション
 

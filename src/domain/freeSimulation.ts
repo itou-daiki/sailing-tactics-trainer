@@ -6,6 +6,7 @@ import {
   getRelativeGain,
   MARK_REACH_RADIUS_PX,
   UPWIND_MARK,
+  type BlanketState,
   type Frame,
   type Point,
   type MarkResult,
@@ -36,6 +37,10 @@ export interface FreeScenarioReplay {
   opponentManeuverTimes: number[];
   userManeuverLoss: number;
   opponentManeuverLoss: number;
+  userBlanketLoss: number;
+  opponentBlanketLoss: number;
+  userBlanketSeconds: number;
+  opponentBlanketSeconds: number;
   finalRelativeGain: number;
   gainChange: number;
   maxRelativeGain: number;
@@ -415,6 +420,84 @@ const moveBoat = (position: Point, speed: number, heading: number): Point => {
   };
 };
 
+const BLANKET_MAX_DISTANCE_BOAT_LENGTHS = 8;
+const BLANKET_MAX_SPEED_LOSS = 0.28;
+
+const getBlanketState = ({
+  source,
+  target,
+  sourcePosition,
+  targetPosition,
+  sourceTack,
+  targetTack,
+  sourceHeading,
+  sourceSpeed,
+  targetCleanSpeed,
+  windAngle,
+  baseSpeed,
+}: {
+  source: BlanketState["source"];
+  target: BlanketState["affected"];
+  sourcePosition: Point;
+  targetPosition: Point;
+  sourceTack: Tack;
+  targetTack: Tack;
+  sourceHeading: number;
+  sourceSpeed: number;
+  targetCleanSpeed: number;
+  windAngle: number;
+  baseSpeed: number;
+}): BlanketState | null => {
+  if (sourceTack !== targetTack) return null;
+
+  // The severe-interference zone follows apparent wind rather than true wind,
+  // and drive force recovers close to one boat length either side of its axis.
+  // The 28% maximum *speed* loss is a milder 420 teaching assumption because
+  // the cited wind-tunnel study measured force, not 420 boat speed.
+  // Sources: https://doi.org/10.5957/CSYS-2013-012
+  // https://www.sailing.org/tools/documents/TRUMwebpagesFinal-%5B20252%5D.pdf
+  const trueWindSpeed = baseSpeed * 1.7;
+  const windFlow = getVelocity(trueWindSpeed, windAngle + 180);
+  const sourceVelocity = getVelocity(sourceSpeed, sourceHeading);
+  const apparentFlow = {
+    x: windFlow.x - sourceVelocity.x,
+    y: windFlow.y - sourceVelocity.y,
+  };
+  const apparentSpeed = Math.hypot(apparentFlow.x, apparentFlow.y);
+  if (apparentSpeed < 0.01) return null;
+  const wake = {
+    x: apparentFlow.x / apparentSpeed,
+    y: apparentFlow.y / apparentSpeed,
+  };
+  const relative = {
+    x: targetPosition.x - sourcePosition.x,
+    y: targetPosition.y - sourcePosition.y,
+  };
+  const downwindDistance = relative.x * wake.x + relative.y * wake.y;
+  const downwindBoatLengths = downwindDistance / BOAT_LENGTH_PX;
+  if (downwindBoatLengths < 0.4
+    || downwindBoatLengths > BLANKET_MAX_DISTANCE_BOAT_LENGTHS) return null;
+
+  const crosswindDistance = Math.abs(relative.x * wake.y - relative.y * wake.x);
+  const halfWidthBoatLengths = Math.min(1.35, 0.9 + downwindBoatLengths * 0.06);
+  const crosswindBoatLengths = crosswindDistance / BOAT_LENGTH_PX;
+  if (crosswindBoatLengths >= halfWidthBoatLengths) return null;
+
+  const distanceStrength = 1
+    - (downwindBoatLengths - 0.4) / (BLANKET_MAX_DISTANCE_BOAT_LENGTHS - 0.4);
+  const lateralStrength = 1 - crosswindBoatLengths / halfWidthBoatLengths;
+  const strength = clamp(distanceStrength * lateralStrength, 0, 1);
+  if (strength < 0.04) return null;
+  return {
+    affected: target,
+    source,
+    strength,
+    speedMultiplier: 1 - BLANKET_MAX_SPEED_LOSS * strength,
+    cleanSpeed: targetCleanSpeed,
+    wakeHeading: Math.atan2(wake.x, wake.y) * 180 / Math.PI,
+  };
+};
+
 const getLegRelativeGain = (
   boat: Point,
   reference: Point,
@@ -446,6 +529,10 @@ export function runFreeScenario(
   const safeManeuverLeadSeconds = maneuverRecoverySeconds + MANEUVER_SAFETY_MARGIN_SECONDS;
   let userManeuverLoss = 0;
   let opponentManeuverLoss = 0;
+  let userBlanketLoss = 0;
+  let opponentBlanketLoss = 0;
+  let userBlanketSeconds = 0;
+  let opponentBlanketSeconds = 0;
   let opponentAvoidUntil = -1;
   let lastOpponentAvoidanceTime = -10;
   const frames: Frame[] = [];
@@ -482,7 +569,7 @@ export function runFreeScenario(
       if (optimizedManeuver) opponentOptimizedTackTimes.add(time);
     }
     let opponentTack = getTack(time, opponentManeuverTimes);
-    const userSpeed = getSpeed(time, userManeuverTimes, config.leg);
+    let userSpeed = getSpeed(time, userManeuverTimes, config.leg);
     let opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
     const userHeading = getHeading(userTack, windAngle, config.leg);
     let opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
@@ -537,6 +624,41 @@ export function runFreeScenario(
     const opponentHeading = time <= opponentAvoidUntil
       ? getBearAwayHeading(opponentTack, windAngle, config.leg)
       : opponentCourseHeading;
+    const userCleanSpeed = userSpeed;
+    const opponentCleanSpeed = opponentSpeed;
+    const userBlanket = getBlanketState({
+      source: "opponent",
+      target: "user",
+      sourcePosition: opponentPosition,
+      targetPosition: userPosition,
+      sourceTack: opponentTack,
+      targetTack: userTack,
+      sourceHeading: opponentHeading,
+      sourceSpeed: opponentCleanSpeed,
+      targetCleanSpeed: userCleanSpeed,
+      windAngle,
+      baseSpeed,
+    });
+    const opponentBlanket = getBlanketState({
+      source: "user",
+      target: "opponent",
+      sourcePosition: userPosition,
+      targetPosition: opponentPosition,
+      sourceTack: userTack,
+      targetTack: opponentTack,
+      sourceHeading: userHeading,
+      sourceSpeed: userCleanSpeed,
+      targetCleanSpeed: opponentCleanSpeed,
+      windAngle,
+      baseSpeed,
+    });
+    const blanket = !userBlanket
+      ? opponentBlanket
+      : !opponentBlanket || userBlanket.strength >= opponentBlanket.strength
+        ? userBlanket
+        : opponentBlanket;
+    if (blanket?.affected === "user") userSpeed *= blanket.speedMultiplier;
+    if (blanket?.affected === "opponent") opponentSpeed *= blanket.speedMultiplier;
 
     frames.push({
       time,
@@ -550,6 +672,7 @@ export function runFreeScenario(
       },
       relativeGain: getLegRelativeGain(userPosition, opponentPosition, windAngle, config.leg),
       leverage: getLeverage(userPosition, opponentPosition, windAngle),
+      ...(blanket ? { blanket } : {}),
     });
 
     const markDistance = getMarkDistance(userPosition, config.leg);
@@ -565,8 +688,12 @@ export function runFreeScenario(
       break;
     }
 
-    userManeuverLoss += baseSpeed - userSpeed;
-    opponentManeuverLoss += baseSpeed - opponentSpeed;
+    userManeuverLoss += baseSpeed - userCleanSpeed;
+    opponentManeuverLoss += baseSpeed - opponentCleanSpeed;
+    userBlanketLoss += userCleanSpeed - userSpeed;
+    opponentBlanketLoss += opponentCleanSpeed - opponentSpeed;
+    if (blanket?.affected === "user") userBlanketSeconds += 1;
+    if (blanket?.affected === "opponent") opponentBlanketSeconds += 1;
     userPosition = moveBoat(userPosition, userSpeed, userHeading);
     opponentPosition = moveBoat(opponentPosition, opponentSpeed, opponentHeading);
   }
@@ -643,6 +770,32 @@ export function runFreeScenario(
       label: "相手がタックできず、下って避ける",
     });
   }
+  let previousBlanketTarget: BlanketState["affected"] | null = null;
+  for (const frame of frames) {
+    const currentTarget = frame.blanket?.affected ?? null;
+    if (currentTarget === previousBlanketTarget) continue;
+    if (previousBlanketTarget === "user" && currentTarget !== "user") {
+      events.push({
+        time: frame.time,
+        kind: "blanket",
+        label: "自艇がクリーンエアへ戻る",
+      });
+    }
+    if (previousBlanketTarget === "opponent" && currentTarget !== "opponent") {
+      events.push({
+        time: frame.time,
+        kind: "blanket",
+        label: "相手がクリーンエアへ戻る",
+      });
+    }
+    if (currentTarget === "user") {
+      events.push({ time: frame.time, kind: "blanket", label: "相手のブランケットに入る" });
+    }
+    if (currentTarget === "opponent") {
+      events.push({ time: frame.time, kind: "blanket", label: "相手をブランケットする" });
+    }
+    previousBlanketTarget = currentTarget;
+  }
   events.push({
     time: finalFrame.time,
     kind: "finish",
@@ -665,6 +818,10 @@ export function runFreeScenario(
     opponentManeuverTimes,
     userManeuverLoss: userManeuverLoss / BOAT_LENGTH_PX,
     opponentManeuverLoss: opponentManeuverLoss / BOAT_LENGTH_PX,
+    userBlanketLoss: userBlanketLoss / BOAT_LENGTH_PX,
+    opponentBlanketLoss: opponentBlanketLoss / BOAT_LENGTH_PX,
+    userBlanketSeconds,
+    opponentBlanketSeconds,
     finalRelativeGain,
     gainChange: finalRelativeGain - firstGain,
     maxRelativeGain: Math.max(...gains),

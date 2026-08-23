@@ -152,6 +152,40 @@ describe("フリーシミュレーション", () => {
     expect(times).toEqual([9, 20]);
   });
 
+  it("相手の見かけの風下へ入るとブランケットで減速し、損失をリプレイへ残す", () => {
+    const replay = runFreeScenario(config({
+      leg: "downwind",
+      leverageBoatLengths: 6,
+      opponentMode: "optimize",
+    }), [10]);
+    const blanketFrame = replay.frames.find((frame) => frame.blanket?.affected === "user");
+
+    expect(blanketFrame).toBeDefined();
+    expect(blanketFrame!.user.speed).toBeLessThan(blanketFrame!.blanket!.cleanSpeed);
+    expect(replay.userBlanketSeconds).toBeGreaterThan(0);
+    expect(replay.userBlanketLoss).toBeGreaterThan(0);
+    expect(replay.events).toContainEqual(expect.objectContaining({
+      kind: "blanket",
+      label: "相手のブランケットに入る",
+    }));
+    expect(replay.events).toContainEqual(expect.objectContaining({
+      kind: "blanket",
+      label: "自艇がクリーンエアへ戻る",
+    }));
+  });
+
+  it("見かけの風の後流から横へ離れればクリーンエアの速度を保つ", () => {
+    const replay = runFreeScenario(config({
+      leg: "downwind",
+      leverageBoatLengths: 20,
+      opponentMode: "optimize",
+    }), [10]);
+
+    expect(replay.frames.every((frame) => frame.blanket === undefined)).toBe(true);
+    expect(replay.userBlanketSeconds + replay.opponentBlanketSeconds).toBe(0);
+    expect(replay.userBlanketLoss + replay.opponentBlanketLoss).toBe(0);
+  });
+
   it("最適化する相手は上りの連続ヘダーを返し、有利なタックへ乗り換える", () => {
     const replay = runFreeScenario(config({
       leg: "upwind",

@@ -21,6 +21,15 @@ export interface BoatState extends Point {
   heading: number;
 }
 
+export interface BlanketState {
+  affected: "user" | "opponent";
+  source: "user" | "opponent";
+  strength: number;
+  speedMultiplier: number;
+  cleanSpeed: number;
+  wakeHeading: number;
+}
+
 export interface Frame {
   time: number;
   windAngle: number;
@@ -28,6 +37,7 @@ export interface Frame {
   opponent: BoatState;
   relativeGain: number;
   leverage: number;
+  blanket?: BlanketState;
 }
 
 export type EventKind =
@@ -36,6 +46,7 @@ export type EventKind =
   | "user-tack"
   | "opponent-tack"
   | "avoid"
+  | "blanket"
   | "cross-window"
   | "return"
   | "mean"

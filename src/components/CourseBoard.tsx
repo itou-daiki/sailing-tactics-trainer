@@ -38,6 +38,23 @@ const polylinePoints = (replay: TrackReplay, until: number) =>
     .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
     .join(" ");
 
+const getBlanketWakePoints = (frame: Frame) => {
+  if (!frame.blanket) return "";
+  const source = frame.blanket.source === "user" ? frame.user : frame.opponent;
+  const radians = frame.blanket.wakeHeading * Math.PI / 180;
+  const direction = { x: Math.sin(radians), y: Math.cos(radians) };
+  const perpendicular = { x: direction.y, y: -direction.x };
+  const startWidth = 5;
+  const endWidth = 18;
+  const length = 90;
+  return [
+    { x: source.x + perpendicular.x * startWidth, y: source.y + perpendicular.y * startWidth },
+    { x: source.x + direction.x * length + perpendicular.x * endWidth, y: source.y + direction.y * length + perpendicular.y * endWidth },
+    { x: source.x + direction.x * length - perpendicular.x * endWidth, y: source.y + direction.y * length - perpendicular.y * endWidth },
+    { x: source.x - perpendicular.x * startWidth, y: source.y - perpendicular.y * startWidth },
+  ].map(screenPoint).map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+};
+
 function Boat({
   point,
   heading,
@@ -77,6 +94,9 @@ export function CourseBoard({
   const markDistance = getMarkDistance(frame.user, leg) / BOAT_LENGTH_PX;
   const isAtMark = markDistance <= MARK_REACH_RADIUS_PX / BOAT_LENGTH_PX;
   const meetingForecastPoint = meetingForecast ? screenPoint(meetingForecast.point) : null;
+  const blanketTarget = frame.blanket
+    ? screenPoint(frame.blanket.affected === "user" ? frame.user : frame.opponent)
+    : null;
 
   return (
     <section className={isAtMark ? "course-board course-board--at-mark" : "course-board"} aria-label="コース上の自艇と相手艇">
@@ -94,6 +114,7 @@ export function CourseBoard({
         <desc id="course-desc">
           オレンジが自艇、紺色が相手艇です。横線は現在の風向に合わせて回転します。
           {meetingForecast ? `破線は約${meetingForecast.seconds}秒先の予測ミート点です。` : ""}
+          {frame.blanket ? `${frame.blanket.affected === "user" ? "自艇" : "相手艇"}がブランケットで減速しています。` : ""}
         </desc>
         <defs>
           <pattern id="chart-grid" width="28" height="28" patternUnits="userSpaceOnUse">
@@ -106,6 +127,14 @@ export function CourseBoard({
 
         <rect width="550" height="560" className="course-map__water" />
         <rect width="550" height="560" fill="url(#chart-grid)" />
+
+        {frame.blanket && blanketTarget ? (
+          <g className="blanket-wake" aria-label={`${frame.blanket.affected === "user" ? "自艇" : "相手艇"}がブランケットで${Math.round((1 - frame.blanket.speedMultiplier) * 100)}%減速`}>
+            <polygon points={getBlanketWakePoints(frame)} />
+            <text x={blanketTarget.x + 18} y={blanketTarget.y - 22}>DIRTY AIR</text>
+            <text x={blanketTarget.x + 18} y={blanketTarget.y - 10}>−{Math.round((1 - frame.blanket.speedMultiplier) * 100)}%</text>
+          </g>
+        ) : null}
 
         <g className="ladder-rungs" transform={`rotate(${frame.windAngle} 275 295)`}>
           {[75, 135, 195, 255, 315, 375, 435, 495].map((y) => (

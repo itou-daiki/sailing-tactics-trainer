@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CourseBoard, type CourseComparison } from "./CourseBoard";
-import { BOAT_LENGTH_PX } from "../domain/simulation";
+import { BOAT_LENGTH_PX, type BlanketState } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
   analyzeManeuverPoints,
@@ -15,6 +15,7 @@ import {
   serializeFreeScenarioConfig,
   type CourseLeg,
   type FreeScenarioConfig,
+  type FreeScenarioReplay,
   type ManeuverPointReview,
   type OpponentDecision,
   type OpponentMode,
@@ -190,10 +191,17 @@ const getExplanation = (
   opponentIsAvoiding = false,
   opponentTackedAtMeeting = false,
   opponentDecision?: OpponentDecision,
+  blanket?: BlanketState,
 ) => {
   const side = config.shiftAngle < 0 ? "左" : config.shiftAngle > 0 ? "右" : "左右どちらにも";
   const action = config.leg === "upwind" ? "タック" : "ジャイブ";
   const timeline = getFreeWindTimeline(config);
+  if (blanket) {
+    const speedLoss = Math.round((1 - blanket.speedMultiplier) * 100);
+    return blanket.affected === "user"
+      ? `相手の見かけの風の後ろに入り、艇速がクリーンエア比で${speedLoss}%低下。左右へ外れて、きれいな風を取り戻します。`
+      : `相手を見かけの風の後ろに置き、相手艇速を${speedLoss}%落としています。カバーだけに集中せず、マークへの角度も確認します。`;
+  }
   if (opponentTackedAtMeeting) {
     return `まだレイライン前です。相手はミートを約${opponentDecision?.secondsToMeeting ?? "数"}秒前に予測し、安全に完了できるうちにタックします。`;
   }
@@ -610,6 +618,46 @@ function WinningRouteFeedback({
       <p className="free-winning-route__limit">
         同じ風・相手・初期位置で最大{analysis.exploredRoutes}通りを比較。教材内の勝ちは「マーク到達＋相手より0.1艇身超前」です。実海面の勝利を保証するものではありません。
       </p>
+    </section>
+  );
+}
+
+function BlanketReview({ replay }: { replay: FreeScenarioReplay }) {
+  const hadUserBlanket = replay.userBlanketSeconds > 0;
+  const hadOpponentBlanket = replay.opponentBlanketSeconds > 0;
+  const heading = hadUserBlanket && hadOpponentBlanket
+    ? "両艇が、きれいな風を奪い合った。"
+    : hadUserBlanket
+      ? `相手の影で、${replay.userBlanketSeconds}秒減速。`
+      : hadOpponentBlanket
+        ? `相手を、${replay.opponentBlanketSeconds}秒減速させた。`
+        : "今回は、クリーンエアを保った。";
+  const nextCall = hadUserBlanket
+    ? "次走：見かけの風の後ろから、横へ約1艇身外れる進路を先に探す。"
+    : hadOpponentBlanket
+      ? "次走：相手を影に置けても、マークへの進入角を失わない時間だけ使う。"
+      : "次走：相手との前後差だけでなく、見かけの風の後ろへ重なる瞬間を声に出す。";
+
+  return (
+    <section className="free-blanket-review" aria-labelledby="free-blanket-review-heading">
+      <div className="section-kicker">AIR CHECK / ブランケット</div>
+      <h3 id="free-blanket-review-heading">{heading}</h3>
+      <dl>
+        <div>
+          <dt>自艇が影にいた</dt>
+          <dd>{replay.userBlanketSeconds}秒</dd>
+          <small>{formatManeuverLoss(replay.userBlanketLoss)}</small>
+        </div>
+        <div>
+          <dt>相手を影に置いた</dt>
+          <dd>{replay.opponentBlanketSeconds}秒</dd>
+          <small>{formatManeuverLoss(replay.opponentBlanketLoss)}</small>
+        </div>
+      </dl>
+      <p>{nextCall}</p>
+      <small className="free-blanket-review__model">
+        教材モデル：同じタックで見かけの風の後流が重なる場合に、最大28%減速。後流は最大8艇身まで計算します。420実艇の測定値ではありません。
+      </small>
     </section>
   );
 }
@@ -1143,6 +1191,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     opponentIsAvoiding,
     opponentTackedAtMeeting,
     currentOpponentDecision,
+    currentFrame.blanket,
   );
   const toggleReplay = () => {
     if (isReplayPlaying) {
@@ -1225,6 +1274,8 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <div><dt>現在の横距離</dt><dd>{(currentFrame.leverage / BOAT_LENGTH_PX).toFixed(1)}艇身</dd></div>
                 <div><dt>操作回数</dt><dd>{userManeuverTimes.length}回</dd></div>
                 <div><dt>相手の状態</dt><dd>{opponentTackedAtMeeting ? "ミート前にタック" : opponentIsAvoiding ? "ベア中" : `${replay.opponentManeuverTimes.filter((eventTime) => eventTime <= time).length}回操作`}</dd></div>
+                <div><dt>空気</dt><dd>{currentFrame.blanket?.affected === "user" ? `影で−${Math.round((1 - currentFrame.blanket.speedMultiplier) * 100)}%` : currentFrame.blanket?.affected === "opponent" ? `相手を−${Math.round((1 - currentFrame.blanket.speedMultiplier) * 100)}%` : "クリーン"}</dd></div>
+                <div><dt>基準艇速との比</dt><dd>{Math.round(currentFrame.user.speed / (activeConfig.leg === "upwind" ? 8.4 : 7.2) * 100)}%</dd></div>
                 <div><dt>最初の予定</dt><dd>{activePlannedTime}秒</dd></div>
                 <div><dt>最初の実行</dt><dd>{userManeuverTimes[0] === undefined ? "まだ" : `${userManeuverTimes[0]}秒`}</dd></div>
               </dl>
@@ -1291,6 +1342,8 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 />
               ) : null}
 
+              <BlanketReview replay={replay} />
+
               <PlanReview
                 plannedTime={activePlannedTime}
                 maneuverTimes={userManeuverTimes}
@@ -1345,6 +1398,8 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <div><dt>最も有利</dt><dd>{formatBoatDifference(replay.maxRelativeGain)}</dd></div>
                 <div><dt>最も不利</dt><dd>{formatBoatDifference(replay.minRelativeGain)}</dd></div>
                 <div><dt>{maneuverLabel}の艇速ロス</dt><dd>{formatManeuverLoss(replay.userManeuverLoss)}</dd></div>
+                <div><dt>自艇のブランケット損失</dt><dd>{formatManeuverLoss(replay.userBlanketLoss)}</dd></div>
+                <div><dt>相手のブランケット損失</dt><dd>{formatManeuverLoss(replay.opponentBlanketLoss)}</dd></div>
               </dl>
               <div className="coach-note free-coach-note">
                 <span className="coach-note__tape">この時点</span>

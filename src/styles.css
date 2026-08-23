@@ -122,6 +122,8 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .meeting-forecast circle { fill: rgba(247, 247, 243, .82); stroke: var(--signal); stroke-width: 2; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .meeting-forecast path { fill: none; stroke: var(--signal); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
 .meeting-forecast text { fill: var(--signal); font-size: 9px; font-weight: 800; }
+.blanket-wake polygon { fill: rgba(242, 201, 76, .34); stroke: #8a6700; stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.blanket-wake text { fill: #6f5200; font: 800 9px/1 "Arial Narrow", sans-serif; letter-spacing: .06em; paint-order: stroke; stroke: var(--sea); stroke-width: 3px; }
 .course-legend { display: flex; flex-wrap: wrap; gap: 14px; min-height: 38px; padding: 10px 12px; border-top: 1px solid var(--ink); background: var(--sail); font-size: .72rem; font-weight: 700; }
 .course-legend span { display: flex; align-items: center; gap: 6px; }
 .legend-line { display: block; width: 24px; border-top: 3px solid; }
@@ -399,6 +401,16 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-winning-route__call strong { display: block; font-size: .68rem; line-height: 1.55; }
 .free-winning-route__call p { margin: 5px 0 0; color: var(--graphite); font-size: .65rem; line-height: 1.65; }
 .free-winning-route__limit { margin: 10px 0 0; color: var(--graphite); font-size: .55rem; line-height: 1.55; }
+.free-blanket-review { margin: 20px 0 24px; padding: 15px 0 14px; border-top: 4px solid #8a6700; border-bottom: 1px solid var(--ink); }
+.free-blanket-review h3 { margin: 7px 0 12px; font-size: 1.08rem; line-height: 1.4; }
+.free-blanket-review dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.free-blanket-review dl > div { min-width: 0; padding: 10px 8px; }
+.free-blanket-review dl > div:first-child { border-right: 1px solid var(--rule); }
+.free-blanket-review dt { color: var(--graphite); font-size: .56rem; line-height: 1.35; }
+.free-blanket-review dd { margin: 5px 0 0; font: 800 1rem/1 "Arial Narrow", "BIZ UDPGothic", sans-serif; font-variant-numeric: tabular-nums; }
+.free-blanket-review dl small { display: block; margin-top: 5px; color: var(--signal); font-size: .57rem; font-weight: 800; }
+.free-blanket-review > p { margin: 11px 0 8px; padding: 9px 10px; border-left: 6px solid var(--wind); background: #fffef5; font-size: .66rem; font-weight: 800; line-height: 1.6; }
+.free-blanket-review__model { display: block; color: var(--graphite); font-size: .54rem; line-height: 1.55; }
 .free-plan-review { margin: 20px 0 22px; padding: 16px 0; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
 .free-plan-review h3 { margin: 6px 0 13px; font-size: 1.08rem; }
 .free-plan-review__rail { display: grid; grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr) 14px minmax(0, 1fr); align-items: stretch; }

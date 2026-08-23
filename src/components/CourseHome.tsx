@@ -40,10 +40,11 @@ export function CourseHome({
         <div className="race-launch__copy">
           <div className="section-kicker">RACE LAB / 実戦モード</div>
           <h2 id="race-launch-title">艇団でスタートする</h2>
-          <p>本部艇、ピン、潮、ブロー、8艇の位置関係を再現。残り60秒から第1上マークまで判断を続けます。</p>
+          <p>初級は4艇のコーチ付き、中級は8艇の実戦設定。残り60秒から第1上マークまで、艇団の中で判断を続けます。</p>
         </div>
         <div className="race-launch__meta">
           <span>RRS 26</span>
+          <span>初級 4艇 / 中級 8艇</span>
           <span>START → MARK 1</span>
         </div>
         <button type="button" onClick={onOpenRaceSimulation}>

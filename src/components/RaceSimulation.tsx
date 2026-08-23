@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_RACE_CONFIG,
   getRaceTackLabel,
@@ -9,9 +9,63 @@ import {
   type RaceScenarioConfig,
   type StartEnd,
 } from "../domain/raceSimulation";
+import {
+  getRaceCoachStop,
+  getRaceLearningFeedback,
+  type RaceCoachStop,
+  type RaceLearningFocus,
+} from "../domain/raceLearning";
 import { RaceCourseBoard } from "./RaceCourseBoard";
 
 type RacePhase = "setup" | "running" | "replay";
+type TrainingLevel = "guided" | "challenge";
+
+const TRAINING_LEVELS: Array<{
+  value: TrainingLevel;
+  label: string;
+  sublabel: string;
+  description: string;
+}> = [
+  {
+    value: "guided",
+    label: "初級｜コーチ付き",
+    sublabel: "4艇・基本海面",
+    description: "見る順番を3つに絞り、判断する時刻で自動停止します。",
+  },
+  {
+    value: "challenge",
+    label: "中級｜自分で組む",
+    sublabel: "8艇・3つの海面",
+    description: "潮、ブロー、スタート位置、最初に使う海面を自分で決めます。",
+  },
+];
+
+const COACH_STOPS: Record<RaceCoachStop, { title: string; instruction: string }> = {
+  thirty: {
+    title: "残り30秒｜時間と距離",
+    instruction: "ラインまで何艇身か、潮がどちらへ押すかを声に出します。早ければ減速します。",
+  },
+  start: {
+    title: "スタート｜成立したか",
+    instruction: "X旗とバウ位置を確認します。OCSなら、順位より先にライン下へ戻ります。",
+  },
+  "dirty-air": {
+    title: "スタート後｜風が走れるか",
+    instruction: "前方2艇身を見ます。乱れた風なら、ベアかタックでクリーンなレーンへ移ります。",
+  },
+  zone: {
+    title: "マーク5艇身前｜ゾーンの準備",
+    instruction: "3艇身ゾーンへ入る前に、内・外、オーバーラップ、次のレグを順にコールします。",
+  },
+};
+
+const REFLECTION_OPTIONS: Array<{ value: RaceLearningFocus; label: string }> = [
+  { value: "start", label: "スタートの時間・距離" },
+  { value: "lane", label: "乱れた風から抜ける" },
+  { value: "shift", label: "振れに合うタック" },
+  { value: "rights", label: "権利艇への早い対応" },
+  { value: "integrate", label: "2つの情報をつなぐ" },
+];
 
 const CONDITIONS: Array<{
   value: RaceCondition;
@@ -75,13 +129,32 @@ const getLiveCall = (
   return "風向、次のクロス、マークへの長いタックを順に確認。";
 };
 
+function RaceGlossary() {
+  return (
+    <details className="race-glossary">
+      <summary>用語を確認する</summary>
+      <dl>
+        <div><dt>ライン</dt><dd>ピンと本部艇を結ぶ、スタートの線。</dd></div>
+        <div><dt>OCS</dt><dd>スタート時にラインのコース側へ出ている状態。ライン下へ戻って再スタートする。</dd></div>
+        <div><dt>クリーンエア</dt><dd>前の艇に乱されていない、走りやすい風。</dd></div>
+        <div><dt>リフト</dt><dd>今のタックのまま、よりマーク方向へ向ける風の振れ。</dd></div>
+        <div><dt>3艇身ゾーン</dt><dd>マークから3艇身の範囲。内外とオーバーラップを確認する。</dd></div>
+      </dl>
+    </details>
+  );
+}
+
 function RaceSetup({
   config,
+  level,
   onChange,
+  onLevelChange,
   onStart,
 }: {
   config: RaceScenarioConfig;
+  level: TrainingLevel;
   onChange: (config: RaceScenarioConfig) => void;
+  onLevelChange: (level: TrainingLevel) => void;
   onStart: () => void;
 }) {
   const condition = CONDITIONS.find((item) => item.value === config.condition)!;
@@ -90,9 +163,29 @@ function RaceSetup({
       <div className="section-kicker">RACE LAB / START → MARK 1</div>
       <h1 id="race-setup-title">艇団の中で、<br />次の一手を決める。</h1>
       <p className="race-setup__lead">
-        実戦で見る主要な情報を一つの海面に置き、残り60秒から第1上マークまでを走ります。
-        速さだけでなく、ライン、潮、ブロー、権利、クリーンエアを同時に見ます。
+        {level === "guided"
+          ? "初めは、ライン、走れる風、マークでの相手関係の3つだけを順に見ます。残り60秒から第1上マークまで、判断点で止まりながら走ります。"
+          : "実戦で見る主要な情報を一つの海面に置き、残り60秒から第1上マークまでを走ります。ライン、潮、ブロー、権利、クリーンエアを同時に見ます。"}
       </p>
+
+      <fieldset className="race-level-choice">
+        <legend>自分に合う練習を選ぶ</legend>
+        <div>
+          {TRAINING_LEVELS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              aria-pressed={level === item.value}
+              className={level === item.value ? "is-selected" : ""}
+              onClick={() => onLevelChange(item.value)}
+            >
+              <span>{item.sublabel}</span>
+              <strong>{item.label}</strong>
+              <small>{item.description}</small>
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
       <div className="race-briefing" aria-label="レース委員会からの情報">
         <div className="race-briefing__flag" aria-hidden="true">RC</div>
@@ -108,57 +201,73 @@ function RaceSetup({
         </dl>
       </div>
 
-      <fieldset className="race-choice">
-        <legend>1　海面を選ぶ</legend>
-        <div className="race-condition-list">
-          {CONDITIONS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={item.value === config.condition ? "is-selected" : ""}
-              aria-pressed={item.value === config.condition}
-              onClick={() => onChange({ ...config, condition: item.value })}
-            >
-              <strong>{item.title}</strong>
-              <span>{item.weather}</span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      {level === "guided" ? (
+        <section className="race-guided-plan" aria-labelledby="guided-plan-title">
+          <div className="section-kicker">COACH PLAN / 見る順番</div>
+          <h2 id="guided-plan-title">1回に、1つずつ判断する。</h2>
+          <ol>
+            <li><span>−0:30</span><strong>ラインまで何艇身？</strong></li>
+            <li><span>START後</span><strong>前の艇の風？ クリーン？</strong></li>
+            <li><span>マーク5艇身前</span><strong>内・外、オーバーラップは？</strong></li>
+          </ol>
+          <p>この3か所で自動停止します。OCSならスタートでも止まります。声に出してから再開してください。</p>
+          <RaceGlossary />
+        </section>
+      ) : (
+        <>
+          <fieldset className="race-choice">
+            <legend>1　海面を選ぶ</legend>
+            <div className="race-condition-list">
+              {CONDITIONS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={item.value === config.condition ? "is-selected" : ""}
+                  aria-pressed={item.value === config.condition}
+                  onClick={() => onChange({ ...config, condition: item.value })}
+                >
+                  <strong>{item.title}</strong>
+                  <span>{item.weather}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
-      <fieldset className="race-choice">
-        <legend>2　スタート位置を決める</legend>
-        <div className="race-plan-grid">
-          {START_ENDS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={item.value === config.startEnd ? "is-selected" : ""}
-              aria-pressed={item.value === config.startEnd}
-              onClick={() => onChange({ ...config, startEnd: item.value })}
-            >
-              <strong>{item.label}</strong><span>{item.call}</span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
+          <fieldset className="race-choice">
+            <legend>2　スタート位置を決める</legend>
+            <div className="race-plan-grid">
+              {START_ENDS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={item.value === config.startEnd ? "is-selected" : ""}
+                  aria-pressed={item.value === config.startEnd}
+                  onClick={() => onChange({ ...config, startEnd: item.value })}
+                >
+                  <strong>{item.label}</strong><span>{item.call}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
-      <fieldset className="race-choice">
-        <legend>3　最初に使う海面を決める</legend>
-        <div className="race-plan-grid">
-          {BEAT_PLANS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={item.value === config.firstBeatPlan ? "is-selected" : ""}
-              aria-pressed={item.value === config.firstBeatPlan}
-              onClick={() => onChange({ ...config, firstBeatPlan: item.value })}
-            >
-              <strong>{item.label}</strong><span>{item.call}</span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
+          <fieldset className="race-choice">
+            <legend>3　最初に使う海面を決める</legend>
+            <div className="race-plan-grid">
+              {BEAT_PLANS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={item.value === config.firstBeatPlan ? "is-selected" : ""}
+                  aria-pressed={item.value === config.firstBeatPlan}
+                  onClick={() => onChange({ ...config, firstBeatPlan: item.value })}
+                >
+                  <strong>{item.label}</strong><span>{item.call}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </>
+      )}
 
       <aside className="race-transfer-note">
         <strong>走る前のコール</strong>
@@ -167,7 +276,7 @@ function RaceSetup({
       </aside>
 
       <button type="button" className="race-start-action" onClick={onStart}>
-        残り60秒から走る <span aria-hidden="true">→</span>
+        {level === "guided" ? "コーチ付きで走る" : "残り60秒から走る"} <span aria-hidden="true">→</span>
       </button>
       <p className="race-model-note">
         信号時刻・権利表示・3艇身ゾーンはRRS 2025–2028を参照。艇速、ブロー、潮、相手艇AIは判断練習用の簡略モデルで、審問の代わりにはなりません。
@@ -197,13 +306,22 @@ function SignalBoard({ time }: { time: number }) {
 }
 
 export function RaceSimulation({ onBack }: { onBack: () => void }) {
-  const [config, setConfig] = useState<RaceScenarioConfig>(DEFAULT_RACE_CONFIG);
+  const [level, setLevel] = useState<TrainingLevel>("guided");
+  const [config, setConfig] = useState<RaceScenarioConfig>({
+    ...DEFAULT_RACE_CONFIG,
+    fleetSize: 4,
+  });
   const [phase, setPhase] = useState<RacePhase>("setup");
   const [actions, setActions] = useState<Array<{ time: number; type: RaceActionType }>>([]);
   const [time, setTime] = useState(-60);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(4);
+  const [activeCoachStop, setActiveCoachStop] = useState<RaceCoachStop | null>(null);
+  const [reflection, setReflection] = useState<RaceLearningFocus | null>(null);
+  const timeRef = useRef(-60);
+  const coachStopsSeenRef = useRef<Set<RaceCoachStop>>(new Set());
   const replay = useMemo(() => runRaceScenario(config, actions), [actions, config]);
+  const learningFeedback = useMemo(() => getRaceLearningFeedback(replay), [replay]);
   const firstTime = replay.frames[0]?.time ?? -60;
   const lastTime = replay.frames.at(-1)?.time ?? firstTime;
   const frame = replay.frames.find((item) => item.time === time)
@@ -214,30 +332,68 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
   // React recommends synchronizing timers in an Effect and clearing them in cleanup.
   // Source: https://react.dev/reference/react/useEffect#connecting-to-an-external-system
   useEffect(() => {
+    timeRef.current = time;
+  }, [time]);
+
+  useEffect(() => {
     if (phase !== "running" || paused) return undefined;
     const timer = window.setInterval(() => {
-      setTime((current) => {
-        if (current >= lastTime) {
-          setPhase("replay");
-          return lastTime;
-        }
-        return Math.min(lastTime, current + 1);
+      const current = timeRef.current;
+      if (current >= lastTime) {
+        window.clearInterval(timer);
+        setPhase("replay");
+        return;
+      }
+
+      const nextTime = Math.min(lastTime, current + 1);
+      const nextFrame = replay.frames.find((item) => item.time === nextTime)
+        ?? replay.frames.at(-1);
+      timeRef.current = nextTime;
+      setTime(nextTime);
+
+      if (level !== "guided" || !nextFrame) return;
+      const nextMarkDistance = Math.hypot(
+        nextFrame.user.x - 50,
+        nextFrame.user.y - 125,
+      );
+      const stop = getRaceCoachStop({
+        time: nextTime,
+        cleanAir: nextFrame.cleanAir,
+        isOcsOutstanding: nextFrame.isOcsOutstanding,
+        markDistance: nextMarkDistance,
       });
+      if (!stop || coachStopsSeenRef.current.has(stop)) return;
+
+      coachStopsSeenRef.current.add(stop);
+      setActiveCoachStop(stop);
+      setPaused(true);
+      window.clearInterval(timer);
     }, 1000 / speed);
     return () => window.clearInterval(timer);
-  }, [lastTime, paused, phase, speed]);
+  }, [lastTime, level, paused, phase, replay.frames, speed]);
 
   if (phase === "setup") {
     return (
       <div className="race-mode">
         <RaceSetup
           config={config}
+          level={level}
           onChange={setConfig}
+          onLevelChange={(nextLevel) => {
+            setLevel(nextLevel);
+            setConfig(nextLevel === "guided"
+              ? { ...DEFAULT_RACE_CONFIG, fleetSize: 4 }
+              : { ...DEFAULT_RACE_CONFIG, fleetSize: 8 });
+          }}
           onStart={() => {
             setActions([]);
             setTime(-60);
+            timeRef.current = -60;
             setPaused(false);
             setSpeed(4);
+            coachStopsSeenRef.current.clear();
+            setActiveCoachStop(null);
+            setReflection(null);
             setPhase("running");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
@@ -270,7 +426,7 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
     <div className="race-mode race-mode--active">
       <section className="race-live-heading" aria-labelledby="race-live-title">
         <div>
-          <div className="section-kicker">RACE LAB / FLEET RACING</div>
+          <div className="section-kicker">RACE LAB / {level === "guided" ? "COACH ON" : "FLEET RACING"}</div>
           <h1 id="race-live-title">スタートから、<br />第1上マークへ。</h1>
         </div>
         <SignalBoard time={time} />
@@ -287,6 +443,16 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
           </div>
           <p className="race-live-call">{call}</p>
 
+          {activeCoachStop ? (
+            <section className="race-coach-stop" aria-live="polite">
+              <span>COACH STOP / 今は1つだけ</span>
+              <strong>{COACH_STOPS[activeCoachStop].title}</strong>
+              <p>{COACH_STOPS[activeCoachStop].instruction}</p>
+            </section>
+          ) : level === "guided" && phase === "running" ? (
+            <p className="race-coach-status">COACH ON｜判断する時刻で自動停止</p>
+          ) : null}
+
           {phase === "running" ? (
             <>
               <div className="race-controls" aria-label="自艇の操作">
@@ -302,7 +468,7 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
                   </button>
                 ) : (
                   <button type="button" onClick={() => recordAction("bear-away")}>
-                    <strong>ベア</strong><span>スペースをつくる</span>
+                    <strong>{level === "guided" ? "下る（ベア）" : "ベア"}</strong><span>スペースをつくる</span>
                   </button>
                 )}
                 <button type="button" className="is-tack" onClick={() => recordAction("tack")}>
@@ -310,7 +476,10 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
                 </button>
               </div>
               <div className="race-transport">
-                <button type="button" onClick={() => setPaused((current) => !current)}>{paused ? "再開" : "一時停止"}</button>
+                <button type="button" onClick={() => {
+                  if (paused) setActiveCoachStop(null);
+                  setPaused((current) => !current);
+                }}>{paused ? "声に出したので再開" : "一時停止"}</button>
                 <div role="group" aria-label="進行速度">
                   {[2, 4, 8].map((value) => (
                     <button key={value} type="button" aria-pressed={speed === value} className={speed === value ? "is-active" : ""} onClick={() => setSpeed(value)}>{value}×</button>
@@ -340,6 +509,7 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
             <div><dt>クリーンエア</dt><dd>{frame.cleanAir ? "確保" : "乱れた風"}</dd></div>
             <div><dt>{phase === "running" ? "次の出来事" : "直近の記録"}</dt><dd>{eventToShow?.label ?? "記録なし"}</dd></div>
           </dl>
+          {level === "guided" ? <RaceGlossary /> : null}
         </aside>
       </div>
 
@@ -366,6 +536,31 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
                 : positionsGained > 0 ? `${positionsGained}艇抜いた` : positionsGained < 0 ? `${Math.abs(positionsGained)}艇失った` : "順位維持"}</small>
             </div>
           </div>
+          <fieldset className="race-reflection">
+            <legend>自分では、次にどこを直す？</legend>
+            <p>数値を見る前に1つ選びます。選んだあと、レース記録と照らし合わせます。</p>
+            <div className="race-reflection__options">
+              {REFLECTION_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={reflection === option.value}
+                  className={reflection === option.value ? "is-selected" : ""}
+                  onClick={() => setReflection(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {reflection ? (
+              <aside className="race-next-focus" aria-live="polite">
+                <span>{reflection === learningFeedback.focus ? "見立てが一致" : "リプレイで見落としを発見"}</span>
+                <strong>{learningFeedback.headline}</strong>
+                <p>{learningFeedback.evidence}</p>
+                <div><b>次の1走</b>{learningFeedback.nextAction}</div>
+              </aside>
+            ) : null}
+          </fieldset>
           <div className="race-metrics">
             <div><span>きれいな風で走れた</span><strong>{cleanAirPercent}%</strong><small>前に艇がいない時間</small></div>
             <div><span>リフト側を走れた</span><strong>{liftedPercent}%</strong><small>振れに対して有利なタック</small></div>
@@ -376,17 +571,24 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
             <ol>
               <li><span>残り30秒</span>「ラインまで何艇身、潮はどちら」</li>
               <li><span>スタート後</span>「前の艇の風か、クリーンか」</li>
-              <li><span>マーク3艇身</span>「内外、オーバーラップ、次のレグ」</li>
+              <li><span>マーク5艇身前</span>「内外、オーバーラップ、次のレグ」</li>
             </ol>
           </div>
           <div className="race-end-actions">
             <button type="button" onClick={() => {
               setActions([]);
               setTime(-60);
+              timeRef.current = -60;
               setPaused(false);
+              coachStopsSeenRef.current.clear();
+              setActiveCoachStop(null);
+              setReflection(null);
               setPhase("running");
-            }}>同じ海面でもう一度</button>
-            <button type="button" onClick={() => setPhase("setup")}>条件を変える</button>
+            }}>{reflection ? `${learningFeedback.label}をもう一度` : "同じ海面でもう一度"}</button>
+            <button type="button" onClick={() => {
+              setReflection(null);
+              setPhase("setup");
+            }}>{level === "guided" ? "中級へ進む／条件を変える" : "条件を変える"}</button>
             <button type="button" onClick={onBack}>コース一覧へ</button>
           </div>
         </section>

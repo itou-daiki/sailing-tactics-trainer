@@ -54,6 +54,7 @@ const WIND_TEMPOS: Array<{ value: WindTempo; label: string; note: string }> = [
 
 const OPPONENT_MODES: Array<{ value: OpponentMode; label: string; note: string }> = [
   { value: "hold", label: "ミート先読み", note: "余裕があれば先にタック" },
+  { value: "optimize", label: "最適化", note: "振れ・レイライン・ミートを毎秒読む" },
   { value: "fixed", label: "18秒で先に返す", note: "その後もレイラインを守る" },
   { value: "cover", label: "2秒後にカバー", note: "追従後もレイラインを守る" },
 ];
@@ -841,7 +842,7 @@ function FreeSetup({
           onChange={(opponentMode) => onChange({ ...config, opponentMode })}
         />
         <p className="free-opponent-rule-note">
-          共通動作：相手は12秒先までミートを見ます。この教材の回復時間（上り4秒／下り3秒）＋安全1秒があれば先に操作。間に合わないときだけ下って後ろを通ります。ミートがなければレイラインで返します。
+          「最適化」は教育モデル内で、4°以上の振れ、操作回復、レイライン、12秒先のミートを毎秒読みます。共通して、安全に返せる余裕がなければ下って後ろを通ります。実海面の唯一の正解ではありません。
         </p>
       </fieldset>
 

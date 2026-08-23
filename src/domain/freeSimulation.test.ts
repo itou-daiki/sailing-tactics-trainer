@@ -151,6 +151,36 @@ describe("フリーシミュレーション", () => {
     expect(times).toEqual([9, 20]);
   });
 
+  it("最適化する相手は上りの連続ヘダーを返し、有利なタックへ乗り換える", () => {
+    const replay = runFreeScenario(config({
+      leg: "upwind",
+      windPattern: "oscillating",
+      opponentMode: "optimize",
+    }), []);
+
+    expect(replay.opponentManeuverTimes.slice(0, 2)).toEqual([6, 18]);
+    expect(replay.events).toContainEqual(expect.objectContaining({
+      time: 6,
+      kind: "opponent-tack",
+      label: "相手が最適化判断でタック",
+    }));
+  });
+
+  it("最適化する相手は下りでは有利側を逆に読み、左振れでジャイブする", () => {
+    const replay = runFreeScenario(config({
+      leg: "downwind",
+      windPattern: "oscillating",
+      opponentMode: "optimize",
+    }), []);
+
+    expect(replay.opponentManeuverTimes[0]).toBe(18);
+    expect(replay.events).toContainEqual(expect.objectContaining({
+      time: 18,
+      kind: "opponent-tack",
+      label: "相手が最適化判断でジャイブ",
+    }));
+  });
+
   it("相手はレイラインまで走ってから、マークへ向かうタックをする", () => {
     const replay = runFreeScenario(config({
       shiftAngle: 0,
@@ -323,7 +353,7 @@ describe("フリーシミュレーション", () => {
     const failures: string[] = [];
     for (const shiftAngle of [-18, -10, 0, 10, 18]) {
       for (const leverageBoatLengths of [4, 8, 12, 16, 20]) {
-        for (const opponentMode of ["hold", "fixed", "cover"] as const) {
+        for (const opponentMode of ["hold", "optimize", "fixed", "cover"] as const) {
           for (const userManeuverTime of [5, 9, 15, 25]) {
             const replay = runFreeScenario(config({
               shiftAngle,
@@ -352,12 +382,12 @@ describe("フリーシミュレーション", () => {
       windPattern: "return-past",
       windTempo: "slow",
       leverageBoatLengths: 20,
-      opponentMode: "cover",
+      opponentMode: "optimize",
     });
 
     const search = serializeFreeScenarioConfig(sharedConfig);
 
-    expect(search).toBe("v=1&leg=downwind&shift=-18&pattern=return-past&tempo=slow&leverage=20&opponent=cover");
+    expect(search).toBe("v=1&leg=downwind&shift=-18&pattern=return-past&tempo=slow&leverage=20&opponent=optimize");
     expect(parseFreeScenarioConfig(`?${search}`)).toEqual(sharedConfig);
   });
 

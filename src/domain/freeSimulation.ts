@@ -18,7 +18,7 @@ export const FREE_SCENARIO_MAX_DURATION = 120;
 export type CourseLeg = "upwind" | "downwind";
 export type WindPattern = "oscillating" | "hold" | "return" | "return-past";
 export type WindTempo = "quick" | "standard" | "slow";
-export type OpponentMode = "hold" | "fixed" | "cover";
+export type OpponentMode = "hold" | "optimize" | "fixed" | "cover";
 
 export interface FreeScenarioConfig {
   leg: CourseLeg;
@@ -138,7 +138,7 @@ const isWindTempo = (value: string | null): value is WindTempo =>
   value === "quick" || value === "standard" || value === "slow";
 
 const isOpponentMode = (value: string | null): value is OpponentMode =>
-  value === "hold" || value === "fixed" || value === "cover";
+  value === "hold" || value === "optimize" || value === "fixed" || value === "cover";
 
 const readBoundedInteger = (
   value: string | null,
@@ -247,7 +247,7 @@ export function getOpponentManeuverTimes(
   config: FreeScenarioConfig,
   userManeuverTimes: number[],
 ): number[] {
-  if (config.opponentMode === "hold") return [];
+  if (config.opponentMode === "hold" || config.opponentMode === "optimize") return [];
   if (config.opponentMode === "fixed") return [18];
   return normalizeManeuverTimes(userManeuverTimes.map((time) => time + 2));
 }
@@ -417,6 +417,7 @@ export function runFreeScenario(
   const opponentManeuverTimes: number[] = [];
   const opponentLaylineTackTimes = new Set<number>();
   const opponentMeetingTackTimes = new Set<number>();
+  const opponentOptimizedTackTimes = new Set<number>();
   const opponentAvoidanceTimes: number[] = [];
   const opponentDecisions: OpponentDecision[] = [];
   const separation = clamp(config.leverageBoatLengths, 2, 22) * BOAT_LENGTH_PX;
@@ -450,9 +451,18 @@ export function runFreeScenario(
         config.leg,
         mark,
       );
-    if (scheduledManeuver || laylineManeuver) {
+    const favoredOpponentTack = getFavoredTack(config.leg, windAngle);
+    const optimizedManeuver = config.opponentMode === "optimize"
+      && time - lastOpponentManeuverTime >= maneuverRecoverySeconds
+      && Math.abs(windAngle) >= 4
+      && favoredOpponentTack !== null
+      && favoredOpponentTack !== opponentTackBeforeManeuver
+      && !laylineManeuver;
+    const didPlannedManeuver = scheduledManeuver || laylineManeuver || optimizedManeuver;
+    if (didPlannedManeuver) {
       opponentManeuverTimes.push(time);
       if (laylineManeuver) opponentLaylineTackTimes.add(time);
+      if (optimizedManeuver) opponentOptimizedTackTimes.add(time);
     }
     let opponentTack = getTack(time, opponentManeuverTimes);
     const userSpeed = getSpeed(time, userManeuverTimes, config.leg);
@@ -477,8 +487,7 @@ export function runFreeScenario(
         12,
       )
       : null;
-    const canTackForMeeting = !scheduledManeuver
-      && !laylineManeuver
+    const canTackForMeeting = !didPlannedManeuver
       && time - lastOpponentManeuverTime >= 4
       && (meetingPrediction?.secondsToClosestApproach ?? 0) >= safeManeuverLeadSeconds;
     if (meetingPrediction && canTackForMeeting) {
@@ -603,6 +612,8 @@ export function runFreeScenario(
       kind: "opponent-tack",
       label: opponentLaylineTackTimes.has(time)
         ? `相手がレイラインで${maneuver}`
+        : opponentOptimizedTackTimes.has(time)
+          ? `相手が最適化判断で${maneuver}`
         : opponentMeetingTackTimes.has(time)
           ? `相手がミート前に${maneuver}`
         : `相手が${maneuver}`,

@@ -4,6 +4,7 @@ import { BOAT_LENGTH_PX } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
   analyzeManeuverPoints,
+  analyzeWinningRoute,
   evaluateManeuverPlan,
   getFreeWindAngle,
   getFreeWindTimeline,
@@ -17,6 +18,7 @@ import {
   type ManeuverPointReview,
   type OpponentDecision,
   type OpponentMode,
+  type WinningRouteAnalysis,
   type WindPattern,
   type WindTempo,
 } from "../domain/freeSimulation";
@@ -479,6 +481,139 @@ function PlanReview({
   );
 }
 
+const schedulesMatch = (left: number[], right: number[]) =>
+  left.length === right.length && left.every((time, index) => time === right[index]);
+
+const getWinningRouteFirstChange = (
+  analysis: WinningRouteAnalysis,
+  maneuverLabel: string,
+) => {
+  const current = analysis.current.maneuverTimes;
+  const recommended = analysis.recommended.maneuverTimes;
+  if (schedulesMatch(current, recommended)) {
+    return `今回の${maneuverLabel}列を、同じ合図で再現する。`;
+  }
+
+  const addedTime = recommended.find((time) => !current.includes(time));
+  const removedTime = current.find((time) => !recommended.includes(time));
+  if (addedTime !== undefined && removedTime === undefined) {
+    return `最初の変更：${addedTime}秒に${maneuverLabel}を加える。`;
+  }
+  if (removedTime !== undefined && addedTime === undefined) {
+    return `最初の変更：${removedTime}秒の${maneuverLabel}を見送る。`;
+  }
+
+  const firstDifference = Math.max(0, current.findIndex((time, index) => time !== recommended[index]));
+  const from = current[firstDifference];
+  const to = recommended[firstDifference];
+  if (from === undefined) return `最初の変更：${to}秒に${maneuverLabel}する。`;
+  if (to === undefined) return `最初の変更：${from}秒の${maneuverLabel}を見送る。`;
+  return `最初の変更：${from}秒から${to}秒へ${maneuverLabel}を動かす。`;
+};
+
+const getWinningRouteCue = (
+  analysis: WinningRouteAnalysis,
+  config: FreeScenarioConfig,
+) => {
+  const recommended = analysis.recommended.maneuverTimes;
+  const current = analysis.current.maneuverTimes;
+  const firstRecommendedChange = recommended.find((time) => !current.includes(time))
+    ?? recommended.find((time, index) => time !== current[index]);
+  const firstRemovedTime = current.find((time) => !recommended.includes(time));
+  const decisionTime = firstRecommendedChange ?? firstRemovedTime;
+  if (decisionTime === undefined) {
+    return "風向・相手・マークの3つを同じ順番で確認し、今回の判断を再現します。";
+  }
+
+  const sourceSchedule = firstRecommendedChange === undefined ? current : recommended;
+  const maneuverCountBefore = sourceSchedule.filter((time) => time < decisionTime).length;
+  const tackBefore = maneuverCountBefore % 2 === 0 ? "port" : "starboard";
+  const snapshot = getWindDecisionSnapshot(config, decisionTime, tackBefore);
+  const windMovement = snapshot.windTrend === "right"
+    ? "右へ動く風"
+    : snapshot.windTrend === "left"
+      ? "左へ動く風"
+      : "折り返し付近の風";
+  if (firstRecommendedChange === undefined) {
+    return `${decisionTime}秒は${windMovement}。ここでは小さな振れを追わず、次の変化とマークへの角度を待ちます。`;
+  }
+  if (snapshot.state === "unfavored") {
+    return `${decisionTime}秒は${windMovement}で、操作前は不利側。返して有利側へ移るのが最初の合図です。`;
+  }
+  if (analysis.current.markResult !== "reached" && analysis.recommended.markResult === "reached") {
+    return `${decisionTime}秒は${windMovement}で、操作前は風に対して有利側。それでも続けるとマークを外すため、ここは小さな振れよりレイラインへの進入角を優先して返します。`;
+  }
+  return `${decisionTime}秒は${windMovement}。風だけで決めず、マークへの角度と相手より前かを同時に確認します。`;
+};
+
+function WinningRouteFeedback({
+  analysis,
+  config,
+  maneuverLabel,
+  onJump,
+}: {
+  analysis: WinningRouteAnalysis;
+  config: FreeScenarioConfig;
+  maneuverLabel: string;
+  onJump: (time: number) => void;
+}) {
+  const isAlreadyWinning = analysis.status === "already-winning";
+  const foundWin = analysis.status === "win-found";
+  const heading = isAlreadyWinning
+    ? "この走りは、前でマークへ。"
+    : foundWin
+      ? "この操作列なら、前でマークへ。"
+      : "勝ち切れない。まず、この案まで直す。";
+  const recommendedLabel = foundWin ? "勝ち筋の仮想試走" : isAlreadyWinning ? "今回" : "最も改善した仮想試走";
+  const nextAction = isAlreadyWinning
+    ? `次は画面の秒数を隠すつもりで、同じ風の合図から${maneuverLabel}を再現する。`
+    : getWinningRouteFirstChange(analysis, maneuverLabel);
+
+  return (
+    <section className={`free-winning-route free-winning-route--${analysis.status}`} aria-labelledby="free-winning-route-heading">
+      <div className="section-kicker">NEXT RUN / どうすれば勝てた？</div>
+      <div className="free-winning-route__heading">
+        <h3 id="free-winning-route-heading">{heading}</h3>
+        <span>{analysis.exploredRoutes} ROUTES</span>
+      </div>
+      <div className="free-winning-route__score" aria-label="今回と推奨する仮想試走の比較">
+        <div>
+          <span>今回</span>
+          <strong>{getMarkResultLabel(analysis.current.markResult)}</strong>
+          <small>{formatBoatDifference(analysis.current.relativeGain)}｜{analysis.current.endTime}秒</small>
+        </div>
+        <i aria-hidden="true">→</i>
+        <div>
+          <span>{recommendedLabel}</span>
+          <strong>{getMarkResultLabel(analysis.recommended.markResult)}</strong>
+          <small>{formatBoatDifference(analysis.recommended.relativeGain)}｜{analysis.recommended.endTime}秒</small>
+        </div>
+      </div>
+      <div className="free-winning-route__schedule">
+        <span>{isAlreadyWinning ? "再現する操作列" : "次に試す操作列"}（タップで時点へ）</span>
+        <ol>
+          {analysis.recommended.maneuverTimes.length > 0
+            ? analysis.recommended.maneuverTimes.map((time, index) => (
+                <li key={`${time}-${index}`}>
+                  <button type="button" onClick={() => onJump(time)} aria-label={`${time}秒の推奨案をリプレイ`}>
+                    <small>{index + 1}</small><strong>{time}秒</strong>
+                  </button>
+                </li>
+              ))
+            : <li className="is-hold"><strong>操作なし</strong></li>}
+        </ol>
+      </div>
+      <div className="free-winning-route__call">
+        <strong>{nextAction}</strong>
+        <p>{getWinningRouteCue(analysis, config)}</p>
+      </div>
+      <p className="free-winning-route__limit">
+        同じ風・相手・初期位置で最大{analysis.exploredRoutes}通りを比較。教材内の勝ちは「マーク到達＋相手より0.1艇身超前」です。実海面の勝利を保証するものではありません。
+      </p>
+    </section>
+  );
+}
+
 const getMarkResultLabel = (result: "reached" | "missed" | "timeout") => {
   if (result === "reached") return "マーク到達";
   if (result === "missed") return "マーク外";
@@ -894,26 +1029,33 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     () => analyzeManeuverPoints(activeConfig, userManeuverTimes),
     [activeConfig, userManeuverTimes],
   );
-  const bestTimingReplay = useMemo(() => {
-    const firstReview = maneuverReviews[0];
-    if (!firstReview || firstReview.bestOffset === 0) return null;
-    const bestTrial = firstReview.trials.find((trial) => trial.offset === firstReview.bestOffset)!;
-    return runFreeScenario(activeConfig, bestTrial.maneuverTimes);
-  }, [activeConfig, maneuverReviews]);
+  const winningRouteAnalysis = useMemo(
+    () => phase === "replay" ? analyzeWinningRoute(activeConfig, userManeuverTimes) : null,
+    [activeConfig, phase, userManeuverTimes],
+  );
+  const winningRouteReplay = useMemo(() => {
+    if (!winningRouteAnalysis
+      || winningRouteAnalysis.status === "already-winning"
+      || schedulesMatch(
+        winningRouteAnalysis.current.maneuverTimes,
+        winningRouteAnalysis.recommended.maneuverTimes,
+      )) return null;
+    return runFreeScenario(activeConfig, winningRouteAnalysis.recommended.maneuverTimes);
+  }, [activeConfig, winningRouteAnalysis]);
   const comparisons = useMemo<CourseComparison[]>(
     () => phase === "replay"
       ? [
           { replay: baseline, variant: "no-tack", label: "自艇操作なし" } as CourseComparison,
-          ...(bestTimingReplay
+          ...(winningRouteReplay
             ? [{
-                replay: bestTimingReplay,
+                replay: winningRouteReplay,
                 variant: "coach" as const,
-                label: maneuverReviews[0]?.bestOffset === -4 ? "最初を4秒早く" : "最初を4秒遅く",
+                label: winningRouteAnalysis?.status === "win-found" ? "勝ち筋の仮想航跡" : "改善案の仮想航跡",
               }]
             : []),
         ]
       : [],
-    [baseline, bestTimingReplay, maneuverReviews, phase],
+    [baseline, phase, winningRouteAnalysis?.status, winningRouteReplay],
   );
 
   useEffect(() => {
@@ -1136,6 +1278,18 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                     ? `今回の${maneuverLabel}により、同じ時刻の操作なし航跡より前にいました。艇速ロスを払っても残ったゲインです。`
                     : `今回の${maneuverLabel}では、同じ時刻の操作なし航跡より後ろでした。風の戻りと艇速ロスを時間軸で確認します。`}
               </p>
+
+              {winningRouteAnalysis ? (
+                <WinningRouteFeedback
+                  analysis={winningRouteAnalysis}
+                  config={activeConfig}
+                  maneuverLabel={maneuverLabel}
+                  onJump={(pointTime) => {
+                    setIsReplayPlaying(false);
+                    setTime(Math.min(replay.endTime, pointTime));
+                  }}
+                />
+              ) : null}
 
               <PlanReview
                 plannedTime={activePlannedTime}

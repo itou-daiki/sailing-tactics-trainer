@@ -4,6 +4,7 @@ import {
   FREE_SCENARIO_MAX_DURATION,
   analyzeFirstManeuverTiming,
   analyzeManeuverPoints,
+  analyzeWinningRoute,
   evaluateManeuverPlan,
   getFreeWindAngle,
   getFreeWindTimeline,
@@ -324,6 +325,38 @@ describe("フリーシミュレーション", () => {
       );
       expect(successfulTime).toBeDefined();
     }
+  });
+
+  it("上りと下りの仮想試走から、マークへ到達して相手より前になる操作列を返す", () => {
+    for (const leg of ["upwind", "downwind"] as const) {
+      const analysis = analyzeWinningRoute(
+        config({ leg, windPattern: "oscillating", opponentMode: "hold" }),
+        [],
+      );
+
+      expect(analysis.status).toBe("win-found");
+      expect(analysis.current.markResult).not.toBe("reached");
+      expect(analysis.recommended.markResult).toBe("reached");
+      expect(analysis.recommended.relativeGain).toBeGreaterThan(0);
+      expect(analysis.recommended.maneuverTimes.length).toBeGreaterThan(0);
+      expect(analysis.recommended.maneuverTimes.every((time, index, times) =>
+        index === 0 || time - times[index - 1] >= 4
+      )).toBe(true);
+    }
+  });
+
+  it("仮想試走で見つけた勝ち筋を再現した場合は、新しい勝ち方を捏造しない", () => {
+    const activeConfig = config({ windPattern: "oscillating", opponentMode: "hold" });
+    const firstAnalysis = analyzeWinningRoute(activeConfig, []);
+    const repeatedAnalysis = analyzeWinningRoute(
+      activeConfig,
+      firstAnalysis.recommended.maneuverTimes,
+    );
+
+    expect(repeatedAnalysis.status).toBe("already-winning");
+    expect(repeatedAnalysis.exploredRoutes).toBe(1);
+    expect(repeatedAnalysis.recommended.maneuverTimes)
+      .toEqual(firstAnalysis.recommended.maneuverTimes);
   });
 
   it("設定範囲を走査しても、終了時刻と全フレームは有限範囲に収まる", () => {

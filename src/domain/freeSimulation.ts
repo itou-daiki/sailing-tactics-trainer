@@ -114,6 +114,23 @@ export interface WindDecisionSnapshot {
   state: SailingShiftState;
 }
 
+export type WinningRouteStatus = "already-winning" | "win-found" | "best-improvement";
+
+export interface WinningRouteResult {
+  maneuverTimes: number[];
+  markResult: MarkResult;
+  endTime: number;
+  markDistance: number;
+  relativeGain: number;
+}
+
+export interface WinningRouteAnalysis {
+  status: WinningRouteStatus;
+  current: WinningRouteResult;
+  recommended: WinningRouteResult;
+  exploredRoutes: number;
+}
+
 export const DEFAULT_FREE_CONFIG: FreeScenarioConfig = {
   leg: "upwind",
   shiftAngle: 10,
@@ -805,4 +822,176 @@ export function analyzeManeuverPoints(
       trials,
     };
   });
+}
+
+const WINNING_MARGIN_BOAT_LENGTHS = 0.1;
+const WINNING_ROUTE_BEAM_WIDTH = 8;
+const WINNING_ROUTE_SEARCH_ROUNDS = 3;
+const WINNING_ROUTE_MAX_MANEUVERS = 7;
+const WINNING_ROUTE_MIN_SPACING_SECONDS = 4;
+
+interface WinningRouteCandidate {
+  result: WinningRouteResult;
+  replay: FreeScenarioReplay;
+}
+
+const toWinningRouteResult = (replay: FreeScenarioReplay): WinningRouteResult => ({
+  maneuverTimes: replay.userManeuverTimes,
+  markResult: replay.markResult,
+  endTime: replay.endTime,
+  markDistance: replay.markDistance,
+  relativeGain: replay.finalRelativeGain,
+});
+
+const isWinningRoute = (result: WinningRouteResult) =>
+  result.markResult === "reached" && result.relativeGain > WINNING_MARGIN_BOAT_LENGTHS;
+
+const compareWinningRouteCandidates = (
+  left: WinningRouteCandidate,
+  right: WinningRouteCandidate,
+) => {
+  const winningDifference = Number(isWinningRoute(right.result)) - Number(isWinningRoute(left.result));
+  if (winningDifference !== 0) return winningDifference;
+
+  const markDifference = MARK_RESULT_PRIORITY[right.result.markResult]
+    - MARK_RESULT_PRIORITY[left.result.markResult];
+  if (markDifference !== 0) return markDifference;
+
+  if (left.result.markResult === "reached" && left.result.endTime !== right.result.endTime) {
+    if (Math.abs(left.result.relativeGain - right.result.relativeGain) >= 0.05) {
+      return right.result.relativeGain - left.result.relativeGain;
+    }
+    return left.result.endTime - right.result.endTime;
+  }
+  if (left.result.markResult !== "reached"
+    && Math.abs(left.result.markDistance - right.result.markDistance) >= 0.05) {
+    return left.result.markDistance - right.result.markDistance;
+  }
+  if (Math.abs(left.result.relativeGain - right.result.relativeGain) >= 0.05) {
+    return right.result.relativeGain - left.result.relativeGain;
+  }
+  if (left.result.maneuverTimes.length !== right.result.maneuverTimes.length) {
+    return left.result.maneuverTimes.length - right.result.maneuverTimes.length;
+  }
+  return left.result.maneuverTimes.join(",").localeCompare(right.result.maneuverTimes.join(","));
+};
+
+const hasSafeManeuverSpacing = (times: number[]) =>
+  times.every((time, index) => index === 0
+    || time - times[index - 1] >= WINNING_ROUTE_MIN_SPACING_SECONDS);
+
+const getWinningRouteDecisionTimes = (
+  config: FreeScenarioConfig,
+  replay: FreeScenarioReplay,
+) => {
+  const timeline = getFreeWindTimeline(config);
+  const horizon = Math.min(
+    84,
+    Math.max(replay.endTime + 12, timeline.returnEnd + 12),
+  );
+  const times = Array.from(
+    { length: Math.floor(horizon / 2) },
+    (_, index) => (index + 1) * 2,
+  );
+  if (config.windPattern === "oscillating") {
+    const quarterCycle = timeline.peak - timeline.shiftStart;
+    for (let time = timeline.shiftStart; time <= horizon; time += quarterCycle) {
+      times.push(time);
+    }
+  } else {
+    times.push(timeline.shiftStart, timeline.peak, timeline.returnStart, timeline.returnEnd);
+  }
+  return normalizeManeuverTimes(times).filter((time) => time >= 1 && time <= horizon);
+};
+
+const getWinningRouteMutations = (
+  schedule: number[],
+  decisionTimes: number[],
+) => {
+  const mutations: number[][] = [];
+  if (schedule.length < WINNING_ROUTE_MAX_MANEUVERS) {
+    for (const time of decisionTimes) {
+      mutations.push([...schedule, time]);
+    }
+  }
+  for (let index = 0; index < schedule.length; index += 1) {
+    mutations.push(schedule.filter((_, itemIndex) => itemIndex !== index));
+    for (const offset of [-8, -4, -2, 2, 4, 8]) {
+      mutations.push(schedule.map((time, itemIndex) => itemIndex === index ? time + offset : time));
+    }
+  }
+  return mutations
+    .map(normalizeManeuverTimes)
+    .filter((times) => times.length <= WINNING_ROUTE_MAX_MANEUVERS)
+    .filter(hasSafeManeuverSpacing);
+};
+
+/**
+ * Re-runs the same wind and opponent configuration with nearby maneuver plans.
+ * A model win means reaching the mark while finishing at least 0.1 boat lengths ahead.
+ */
+export function analyzeWinningRoute(
+  config: FreeScenarioConfig,
+  userManeuverTimes: number[],
+): WinningRouteAnalysis {
+  const currentReplay = runFreeScenario(config, userManeuverTimes);
+  const currentCandidate: WinningRouteCandidate = {
+    result: toWinningRouteResult(currentReplay),
+    replay: currentReplay,
+  };
+  if (isWinningRoute(currentCandidate.result)) {
+    return {
+      status: "already-winning",
+      current: currentCandidate.result,
+      recommended: currentCandidate.result,
+      exploredRoutes: 1,
+    };
+  }
+
+  const seen = new Set([currentCandidate.result.maneuverTimes.join(",")]);
+  let exploredRoutes = 1;
+  let bestCandidate = currentCandidate;
+  let beam = [currentCandidate];
+
+  const emptyKey = "";
+  if (!seen.has(emptyKey)) {
+    const replay = runFreeScenario(config, []);
+    const candidate = { result: toWinningRouteResult(replay), replay };
+    seen.add(emptyKey);
+    exploredRoutes += 1;
+    beam.push(candidate);
+    if (compareWinningRouteCandidates(candidate, bestCandidate) < 0) bestCandidate = candidate;
+  }
+
+  for (let round = 0; round < WINNING_ROUTE_SEARCH_ROUNDS; round += 1) {
+    const roundCandidates: WinningRouteCandidate[] = [];
+    for (const candidate of beam) {
+      const decisionTimes = getWinningRouteDecisionTimes(config, candidate.replay);
+      for (const maneuverTimes of getWinningRouteMutations(
+        candidate.result.maneuverTimes,
+        decisionTimes,
+      )) {
+        const key = maneuverTimes.join(",");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const replay = runFreeScenario(config, maneuverTimes);
+        roundCandidates.push({ result: toWinningRouteResult(replay), replay });
+        exploredRoutes += 1;
+      }
+    }
+    if (roundCandidates.length === 0) break;
+    roundCandidates.sort(compareWinningRouteCandidates);
+    if (compareWinningRouteCandidates(roundCandidates[0], bestCandidate) < 0) {
+      bestCandidate = roundCandidates[0];
+    }
+    beam = roundCandidates.slice(0, WINNING_ROUTE_BEAM_WIDTH);
+    if (isWinningRoute(bestCandidate.result)) break;
+  }
+
+  return {
+    status: isWinningRoute(bestCandidate.result) ? "win-found" : "best-improvement",
+    current: currentCandidate.result,
+    recommended: bestCandidate.result,
+    exploredRoutes,
+  };
 }

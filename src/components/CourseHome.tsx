@@ -24,12 +24,30 @@ export function CourseHome({
   return (
     <div className="course-home">
       <section className="course-intro" aria-labelledby="course-title">
-        <div className="section-kicker">420 TACTICAL COURSE / 自主練習</div>
-        <h1 id="course-title">風と相手を、<br />同時に見る。</h1>
+        <div className="section-kicker">420 SHIFT TRAINING / 自主練習</div>
+        <h1 id="course-title">振れを見て、<br />返す場所を決める。</h1>
         <p>
-          レース中の3秒を、陸で何度でも練習する。答えを覚えるのではなく、
-          風向・横の距離・相手の動きから理由を説明できる状態を目指します。
+          タック／ジャイブは、1回の正解当てではありません。右、左、また右へ動く風を読み、
+          待つか返すかをマークまで何度も判断します。
         </p>
+      </section>
+
+      <section className="free-launch free-launch--primary" aria-labelledby="free-launch-title">
+        <div className="free-launch__mast" aria-hidden="true">
+          <svg viewBox="0 0 42 58"><polyline points="2,29 9,8 16,29 23,50 30,29 40,8" /></svg>
+        </div>
+        <div className="free-launch__copy">
+          <div className="section-kicker">SHIFT LAB / TACK &amp; GYBE POINT</div>
+          <h2 id="free-launch-title">どこで返すか、全部見る</h2>
+          <p>何度も振れ、振れ戻る風を再現。各タック／ジャイブを前後4秒へ動かし、ゲイン、ロス、マーク到達を個別に比べます。</p>
+        </div>
+        <div className="free-launch__meta">
+          <span>連続する振れ</span>
+          <span>全操作を分析</span>
+        </div>
+        <button type="button" onClick={onOpenFreeSimulation}>
+          判断点を練習する <span aria-hidden="true">→</span>
+        </button>
       </section>
 
       <section className="race-launch" aria-labelledby="race-launch-title">
@@ -38,9 +56,9 @@ export function CourseHome({
           <i />
         </div>
         <div className="race-launch__copy">
-          <div className="section-kicker">RACE LAB / 実戦モード</div>
-          <h2 id="race-launch-title">艇団でスタートする</h2>
-          <p>初級は4艇のコーチ付き、中級は8艇の実戦設定。残り60秒から第1上マークまで、艇団の中で判断を続けます。</p>
+          <div className="section-kicker">RACE LAB / 応用</div>
+          <h2 id="race-launch-title">艇団の中で使う</h2>
+          <p>SHIFT LABで判断点を学んだら、初級4艇／中級8艇のスタートから第1上マークまで実戦へつなげます。</p>
         </div>
         <div className="race-launch__meta">
           <span>RRS 26</span>
@@ -48,25 +66,7 @@ export function CourseHome({
           <span>START → MARK 1</span>
         </div>
         <button type="button" onClick={onOpenRaceSimulation}>
-          実戦へ出る <span aria-hidden="true">→</span>
-        </button>
-      </section>
-
-      <section className="free-launch" aria-labelledby="free-launch-title">
-        <div className="free-launch__mast" aria-hidden="true">
-          <span>∞</span>
-        </div>
-        <div className="free-launch__copy">
-          <div className="section-kicker">OPEN WATER / FREE SAIL</div>
-          <h2 id="free-launch-title">シミュレーション</h2>
-          <p>上り・下り、風の振れ戻り、艇間距離、相手の反応を設定。タックやジャイブを何度でも試せます。</p>
-        </div>
-        <div className="free-launch__meta">
-          <span>点数なし</span>
-          <span>回数制限なし</span>
-        </div>
-        <button type="button" onClick={onOpenFreeSimulation}>
-          海面をつくる <span aria-hidden="true">→</span>
+          艇団で試す <span aria-hidden="true">→</span>
         </button>
       </section>
 

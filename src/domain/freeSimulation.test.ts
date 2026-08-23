@@ -3,9 +3,11 @@ import {
   DEFAULT_FREE_CONFIG,
   FREE_SCENARIO_MAX_DURATION,
   analyzeFirstManeuverTiming,
+  analyzeManeuverPoints,
   evaluateManeuverPlan,
   getFreeWindAngle,
   getFreeWindTimeline,
+  getWindDecisionSnapshot,
   getOpponentManeuverTimes,
   getRelativeGainDifferenceAtCommonTime,
   parseFreeScenarioConfig,
@@ -20,9 +22,95 @@ const config = (overrides: Partial<FreeScenarioConfig> = {}): FreeScenarioConfig
 });
 
 describe("フリーシミュレーション", () => {
+  it("実戦型の海面は右・左・右へ何度も振れる", () => {
+    const oscillating = config({ windPattern: "oscillating" });
+
+    expect([4, 10, 16, 22, 28, 34].map((time) =>
+      getFreeWindAngle(time, oscillating)
+    )).toEqual([0, 10, 0, -10, 0, 10]);
+  });
+
+  it("反復する最大振れと平均通過をリプレイの判断点に残す", () => {
+    const replay = runFreeScenario(config({ windPattern: "oscillating" }), []);
+
+    expect(replay.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ time: 10, kind: "peak", label: "右振れ 最大10°" }),
+      expect.objectContaining({ time: 16, kind: "mean", label: "平均を越えて左へ" }),
+      expect.objectContaining({ time: 22, kind: "peak", label: "左振れ 最大10°" }),
+      expect.objectContaining({ time: 28, kind: "mean", label: "平均を越えて右へ" }),
+      expect.objectContaining({ time: 34, kind: "peak", label: "右振れ 最大10°" }),
+    ]));
+  });
+
+  it("最大振れは変化中ではなく折り返しとして読む", () => {
+    const snapshot = getWindDecisionSnapshot(
+      config({ windPattern: "oscillating" }),
+      10,
+      "port",
+    );
+
+    expect(snapshot.windAngle).toBe(10);
+    expect(snapshot.windTrend).toBe("steady");
+  });
+
+  it("連続するヘダーに合わせた各タックポイントを個別に評価する", () => {
+    const reviews = analyzeManeuverPoints(
+      config({ windPattern: "oscillating", opponentMode: "hold" }),
+      [8, 20],
+    );
+
+    expect(reviews).toHaveLength(2);
+    expect(reviews[0]).toMatchObject({
+      maneuverNumber: 1,
+      time: 8,
+      windTrend: "right",
+      tackBefore: "port",
+      tackAfter: "starboard",
+      stateBefore: "unfavored",
+      stateAfter: "favored",
+      secondsSincePrevious: null,
+    });
+    expect(reviews[1]).toMatchObject({
+      maneuverNumber: 2,
+      time: 20,
+      windTrend: "left",
+      tackBefore: "starboard",
+      tackAfter: "port",
+      stateBefore: "unfavored",
+      stateAfter: "favored",
+      secondsSincePrevious: 12,
+    });
+    expect([-4, 0, 4]).toContain(reviews[0].bestOffset);
+    expect(reviews[0].trials.map((trial) => trial.offset)).toEqual([-4, 0, 4]);
+  });
+
+  it("下りは上りと有利なサイドが逆になるため、ジャイブ前後を逆向きに評価する", () => {
+    const [review] = analyzeManeuverPoints(
+      config({ leg: "downwind", windPattern: "oscillating", opponentMode: "hold" }),
+      [8],
+    );
+
+    expect(review).toMatchObject({
+      tackBefore: "port",
+      tackAfter: "starboard",
+      stateBefore: "favored",
+      stateAfter: "unfavored",
+    });
+  });
+
+  it("前後4秒の仮想操作は隣の操作を追い越したり同時刻へ潰したりしない", () => {
+    const reviews = analyzeManeuverPoints(
+      config({ windPattern: "oscillating", opponentMode: "hold" }),
+      [8, 12],
+    );
+
+    expect(reviews[0].trials.find((trial) => trial.offset === 4)?.maneuverTimes).toEqual([11, 12]);
+    expect(reviews[1].trials.find((trial) => trial.offset === -4)?.maneuverTimes).toEqual([8, 9]);
+  });
+
   it("振れが平均へ戻る設定と、振れたままの設定を作れる", () => {
-    expect(getFreeWindAngle(10, config())).toBe(10);
-    expect(getFreeWindAngle(30, config())).toBe(0);
+    expect(getFreeWindAngle(10, config({ windPattern: "return" }))).toBe(10);
+    expect(getFreeWindAngle(30, config({ windPattern: "return" }))).toBe(0);
     expect(getFreeWindAngle(30, config({ windPattern: "hold" }))).toBe(10);
   });
 
@@ -33,13 +121,13 @@ describe("フリーシミュレーション", () => {
       returnStart: 11,
       returnEnd: 22,
     });
-    expect(getFreeWindAngle(7, config({ windTempo: "quick" }))).toBe(10);
-    expect(getFreeWindAngle(22, config({ windTempo: "quick" }))).toBe(0);
-    expect(getFreeWindAngle(22, config({ windTempo: "slow" }))).toBe(10);
+    expect(getFreeWindAngle(7, config({ windPattern: "return", windTempo: "quick" }))).toBe(10);
+    expect(getFreeWindAngle(22, config({ windPattern: "return", windTempo: "quick" }))).toBe(0);
+    expect(getFreeWindAngle(22, config({ windPattern: "return", windTempo: "slow" }))).toBe(10);
   });
 
   it("右振れでは右側の自艇に暫定ゲインが生まれ、戻ると小さくなる", () => {
-    const replay = runFreeScenario(config({ opponentMode: "hold" }), []);
+    const replay = runFreeScenario(config({ windPattern: "return", opponentMode: "hold" }), []);
     const peakGain = replay.frames[10].relativeGain;
     const returnedGain = replay.frames[30].relativeGain;
 

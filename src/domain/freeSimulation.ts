@@ -16,7 +16,7 @@ import {
 export const FREE_SCENARIO_MAX_DURATION = 120;
 
 export type CourseLeg = "upwind" | "downwind";
-export type WindPattern = "hold" | "return" | "return-past";
+export type WindPattern = "oscillating" | "hold" | "return" | "return-past";
 export type WindTempo = "quick" | "standard" | "slow";
 export type OpponentMode = "hold" | "fixed" | "cover";
 
@@ -90,10 +90,34 @@ export interface TimingAnalysis {
   trials: TimingTrial[];
 }
 
+export type WindTrend = "left" | "steady" | "right";
+export type SailingShiftState = "favored" | "neutral" | "unfavored";
+
+export interface ManeuverPointReview {
+  maneuverNumber: number;
+  time: number;
+  windAngle: number;
+  windTrend: WindTrend;
+  tackBefore: Tack;
+  tackAfter: Tack;
+  stateBefore: SailingShiftState;
+  stateAfter: SailingShiftState;
+  secondsSincePrevious: number | null;
+  bestOffset: TimingOffset;
+  trials: TimingTrial[];
+}
+
+export interface WindDecisionSnapshot {
+  windAngle: number;
+  windTrend: WindTrend;
+  tack: Tack;
+  state: SailingShiftState;
+}
+
 export const DEFAULT_FREE_CONFIG: FreeScenarioConfig = {
   leg: "upwind",
   shiftAngle: 10,
-  windPattern: "return",
+  windPattern: "oscillating",
   windTempo: "standard",
   leverageBoatLengths: 12,
   opponentMode: "hold",
@@ -108,7 +132,7 @@ const isCourseLeg = (value: string | null): value is CourseLeg =>
   value === "upwind" || value === "downwind";
 
 const isWindPattern = (value: string | null): value is WindPattern =>
-  value === "hold" || value === "return" || value === "return-past";
+  value === "oscillating" || value === "hold" || value === "return" || value === "return-past";
 
 const isWindTempo = (value: string | null): value is WindTempo =>
   value === "quick" || value === "standard" || value === "slow";
@@ -199,6 +223,12 @@ export function getFreeWindAngle(time: number, config: FreeScenarioConfig): numb
   const safeTime = clamp(time, 0, FREE_SCENARIO_MAX_DURATION);
   const timeline = getFreeWindTimeline(config);
   if (safeTime <= timeline.shiftStart) return 0;
+  if (config.windPattern === "oscillating") {
+    const quarterCycle = timeline.peak - timeline.shiftStart;
+    const radians = ((safeTime - timeline.shiftStart) / quarterCycle) * Math.PI / 2;
+    const angle = Math.sin(radians) * config.shiftAngle;
+    return Math.abs(angle) < 1e-9 ? 0 : angle;
+  }
   if (safeTime < timeline.peak) {
     return ((safeTime - timeline.shiftStart) / (timeline.peak - timeline.shiftStart)) * config.shiftAngle;
   }
@@ -515,22 +545,48 @@ export function runFreeScenario(
     opponentPosition = moveBoat(opponentPosition, opponentSpeed, opponentHeading);
   }
 
+  const finalFrame = frames[frames.length - 1];
   const direction = config.shiftAngle < 0 ? "左" : "右";
+  const oppositeDirection = config.shiftAngle < 0 ? "右" : "左";
   const maneuver = config.leg === "upwind" ? "タック" : "ジャイブ";
-  const events: ScenarioEvent[] = [
-    {
-      time: windTimeline.shiftStart,
-      kind: "shift",
-      label: config.shiftAngle === 0 ? "平均風向のまま" : `${direction}振れが始まる`,
-    },
-    {
+  const events: ScenarioEvent[] = [{
+    time: windTimeline.shiftStart,
+    kind: "shift",
+    label: config.shiftAngle === 0 ? "平均風向のまま" : `${direction}振れが始まる`,
+  }];
+
+  if (config.windPattern === "oscillating") {
+    const quarterCycle = windTimeline.peak - windTimeline.shiftStart;
+    for (let index = 1; ; index += 1) {
+      const eventTime = windTimeline.shiftStart + quarterCycle * index;
+      if (eventTime > finalFrame.time) break;
+      if (index % 2 === 1) {
+        const peakDirection = index % 4 === 1 ? direction : oppositeDirection;
+        events.push({
+          time: eventTime,
+          kind: "peak",
+          label: config.shiftAngle === 0
+            ? "風向変化なし"
+            : `${peakDirection}振れ 最大${Math.abs(config.shiftAngle)}°`,
+        });
+      } else {
+        const nextDirection = index % 4 === 2 ? oppositeDirection : direction;
+        events.push({
+          time: eventTime,
+          kind: "mean",
+          label: config.shiftAngle === 0 ? "平均風向のまま" : `平均を越えて${nextDirection}へ`,
+        });
+      }
+    }
+  } else {
+    events.push({
       time: windTimeline.peak,
       kind: "peak",
       label: config.shiftAngle === 0 ? "風向変化なし" : `${direction}振れ 最大${Math.abs(config.shiftAngle)}°`,
-    },
-  ];
+    });
+  }
 
-  if (config.windPattern !== "hold") {
+  if (config.windPattern !== "hold" && config.windPattern !== "oscillating") {
     events.push({ time: windTimeline.returnStart, kind: "return", label: "風が戻り始める" });
     events.push({
       time: windTimeline.returnEnd,
@@ -559,7 +615,6 @@ export function runFreeScenario(
       label: "相手がタックできず、下って避ける",
     });
   }
-  const finalFrame = frames[frames.length - 1];
   events.push({
     time: finalFrame.time,
     kind: "finish",
@@ -654,4 +709,89 @@ export function analyzeFirstManeuverTiming(
   const bestTrial = [...trials].sort(compareTimingTrials)[0];
 
   return { bestOffset: bestTrial.offset, trials };
+}
+
+const getFavoredTack = (
+  leg: CourseLeg,
+  windAngle: number,
+): Tack | null => {
+  if (Math.abs(windAngle) < 1.5) return null;
+  if (leg === "upwind") return windAngle > 0 ? "starboard" : "port";
+  return windAngle > 0 ? "port" : "starboard";
+};
+
+const getSailingShiftState = (
+  tack: Tack,
+  leg: CourseLeg,
+  windAngle: number,
+): SailingShiftState => {
+  const favoredTack = getFavoredTack(leg, windAngle);
+  if (favoredTack === null) return "neutral";
+  return tack === favoredTack ? "favored" : "unfavored";
+};
+
+export function getWindDecisionSnapshot(
+  config: FreeScenarioConfig,
+  time: number,
+  tack: Tack,
+): WindDecisionSnapshot {
+  const windAngle = getFreeWindAngle(time, config);
+  const earlierWindAngle = getFreeWindAngle(Math.max(0, time - 1), config);
+  const change = windAngle - earlierWindAngle;
+  const windTrend: WindTrend = change > 0.5 ? "right" : change < -0.5 ? "left" : "steady";
+  return {
+    windAngle,
+    windTrend,
+    tack,
+    state: getSailingShiftState(tack, config.leg, windAngle),
+  };
+}
+
+export function analyzeManeuverPoints(
+  config: FreeScenarioConfig,
+  userManeuverTimes: number[],
+): ManeuverPointReview[] {
+  const normalizedTimes = normalizeManeuverTimes(userManeuverTimes);
+  return normalizedTimes.map((time, index) => {
+    const tackBefore = getTack(time - 1, normalizedTimes);
+    const tackAfter = getTack(time, normalizedTimes);
+    const beforeSnapshot = getWindDecisionSnapshot(config, time, tackBefore);
+    const afterSnapshot = getWindDecisionSnapshot(config, time, tackAfter);
+    const trials = ([-4, 0, 4] as TimingOffset[]).map((offset): TimingTrial => {
+      const previousTime = normalizedTimes[index - 1];
+      const nextTime = normalizedTimes[index + 1];
+      const earliestTime = previousTime === undefined ? 1 : previousTime + 1;
+      const latestTime = nextTime === undefined ? FREE_SCENARIO_MAX_DURATION : nextTime - 1;
+      const maneuverTime = clamp(time + offset, earliestTime, latestTime);
+      const maneuverTimes = normalizeManeuverTimes(
+        normalizedTimes.map((item, itemIndex) => itemIndex === index ? maneuverTime : item),
+      );
+      const replay = runFreeScenario(config, maneuverTimes);
+      return {
+        offset,
+        maneuverTime,
+        maneuverTimes,
+        markResult: replay.markResult,
+        endTime: replay.endTime,
+        markDistance: replay.markDistance,
+        relativeGain: replay.finalRelativeGain,
+        maneuverLoss: replay.userManeuverLoss,
+      };
+    });
+    const bestTrial = [...trials].sort(compareTimingTrials)[0];
+
+    return {
+      maneuverNumber: index + 1,
+      time,
+      windAngle: beforeSnapshot.windAngle,
+      windTrend: beforeSnapshot.windTrend,
+      tackBefore,
+      tackAfter,
+      stateBefore: beforeSnapshot.state,
+      stateAfter: afterSnapshot.state,
+      secondsSincePrevious: index === 0 ? null : time - normalizedTimes[index - 1],
+      bestOffset: bestTrial.offset,
+      trials,
+    };
+  });
 }

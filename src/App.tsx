@@ -98,7 +98,7 @@ export default function App() {
               <button type="button" className="back-to-course" onClick={openCourse}>← コース</button>
               <div className={isFreeSimulation || isRaceSimulation ? "lesson-number lesson-number--free" : "lesson-number"}>
                 <span>{isFreeSimulation || isRaceSimulation ? "MODE" : "LESSON"}</span>
-                <strong>{isRaceSimulation ? "RACE" : isFreeSimulation ? "FREE" : lesson?.number.toString().padStart(2, "0")}</strong>
+                <strong>{isRaceSimulation ? "RACE" : isFreeSimulation ? "SHIFT" : lesson?.number.toString().padStart(2, "0")}</strong>
               </div>
             </div>
           ) : (

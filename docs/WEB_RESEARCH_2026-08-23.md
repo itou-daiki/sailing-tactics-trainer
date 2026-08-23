@@ -1,6 +1,7 @@
 # SHIFT｜420 TACTICS Web調査メモ
 
 調査日: 2026-08-23
+追補調査日: 2026-08-24
 
 ## 調査の問い
 
@@ -21,6 +22,8 @@
 | [World Sailing Level 1 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel1TechnicalCourse324.05.13-%5B15060%5D.pdf) | 練習を `Plan – Do – Review` として組み、brief、実施、debriefをつなぐ | 操作前の予定時刻、実行時刻、リプレイを一続きにする |
 | [World Sailing Level 2 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel2TechnicalCourseSyllabus-%5B18133%5D.pdf) | 目的、学習成果、陸上ドリル、対話型理論、recap/debrief、映像資源を組み合わせる | 各プリセットに「何を見る練習か」を明記し、結果だけで終わらせない |
 | [International 420 Class online training resource](https://www.sailing.org/2015/05/05/international-420-class-launches-new-online-training-resource/) | 420向けExercise e-Bookは、選んだ練習を段階化し、目的、必要物、評価、動画・アニメーション、debrief notes、progress benchmarkをまとめている | 420専用ドリルと振り返り問いを製品の中心に置く |
+| [World Sailing: Picture Perfect Start To Key West 2010](https://www.sailing.org/2010/01/19/picture-perfect-start-to-key-west-2010/) | 7〜10ktのオシレーティングな風で、選手報告の振れ幅は5〜50°。複数回のシフトごとにゲイン／ロスの機会があり、シフトを拾った回数が戦術結果に結びついた | 1回だけ振れて静止する標準海面をやめ、右 → 左 → 右の振れをマーク到達まで反復する。最初の操作だけでなく全操作を評価する |
+| [World Sailing: 420 Class Launches Online Training Video](https://www.sailing.org/2011/06/02/420-class-launches-online-training-video/) | 初心者と経験者の両方を対象に、異なる風・海面でマニューバー時に考える点を示し、視聴・実践・レビューの反復を勧める | SHIFT LABを `観察 → 操作 → 全ポイントのレビュー → 再試行` の短い循環にする。総合得点より、各マニューバーの根拠を分解する |
 | [World Sailing Racing Rules](https://www.sailing.org/inside-world-sailing/rules-regulations/racingrules/) / [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | 現行ルールは2025–2028版。Rule 10ではポート艇がスターボード艇を避け、Rule 13ではタック中の艇がクローズホールドになるまで他艇を避け続ける | 「前後ゲインがプラスならベア」とは解釈しない。ミートを早期予測し、タック中も避けられる時間があれば先にタック、安全余地がない場合だけベアする |
 | [2025–2028 RRS with Changes and Corrections](https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf) | Rule 26は予告5分、準備4分、1分、スタート0分の信号系列。Rule 29.1はスタート時にコース側の艇があればX旗で個別リコールを知らせる。Rule 18のゾーンは艇長3艇身 | RACE LABを最後の60秒から開始して既に進行中の信号系列を見せ、スタート時のライン越えをX旗とリプレイに残す。上マークは3艇身ゾーンを可視化する |
 | [World Sailing Race Management Manual](https://www.sailing.org/tools/documents/RaceManagementManualJuly2019-%5B25256%5D.pdf) | レース運営では、風と潮流に合わせたコース調整、スタート手順、風上・風下コースやオリンピック・トラペゾイドの設営を扱う | マークだけの抽象画面ではなく、RC艇、ピン、スタートライン、風向、潮流、風上マークを一つの海面として読む。ただし初版は第1上マークまでに絞る |
@@ -97,12 +100,16 @@
 12. 初級では残り30秒、スタート後の乱れた風、マーク5艇身前で自動停止し、判断を声に出してから再開する。OCS時はスタートでも停止する。
 13. リプレイ数値を表示する前に自分の改善点を選び、スタート、レーン、シフト、権利、統合の優先順で次の1走を提案する。
 14. OCS未解消、OCS回復、規則リスク、クリーンエア率、リフト側率という観察可能な記録から次課題を決め、判定を単体テストする。
+15. ホームの主入口をSHIFT LABへ変更し、「タック／ジャイブする場所」を単独の学習対象にする。
+16. 標準風を、右振れ・平均通過・左振れ・平均通過の連続波形へ変更する。
+17. ライブ中に `WIND MOVE → NOW → CALL` を表示し、風の変化方向、現在のタックの有利不利、維持／操作の根拠を言葉で結ぶ。
+18. 実行した全タック／ジャイブをPOINT LOGに残し、各1点だけを4秒早く・今回・4秒遅くした試走で比較する。
 
 ## 独自ポジション
 
 SHIFTは、GPS解析製品や大画面向け総合シミュレーターの縮小版を目指さない。
 
-`420専用 × スマホ優先 × 登録不要 × 海に出る前 × 予定と理由を振り返る`
+`420専用 × タック／ジャイブポイント × スマホ優先 × 登録不要 × 海に出る前`
 
 この組み合わせを核にする。数値モデルは単純であることを明示し、複雑な実海面の再現よりも、判断の因果を説明できることを優先する。
 
@@ -118,6 +125,8 @@ SHIFTは、GPS解析製品や大画面向け総合シミュレーターの縮小
 - 初級4艇で「見る順番」を習得したあと、中級8艇でも自艇、次の危険、マークまでの意図を迷わず読めるか
 - 自動停止で声に出した学習者が、停止なしの学習者より遅延テストで判断理由を説明できるか
 - 自己評価とリプレイの見立てが繰り返し一致するようになるか
+- 1回の振れ戻りで理解した学習者が、反復する振れで「毎回返さず、今のタックの有利不利を言う」課題へ転移できるか
+- POINT LOGの2点以上について、風向だけでなく「風が動く向き」と「操作ロス」を使って理由を説明できるか
 
 ## 調査上の制約
 

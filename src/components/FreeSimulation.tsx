@@ -3,18 +3,20 @@ import { CourseBoard, type CourseComparison } from "./CourseBoard";
 import { BOAT_LENGTH_PX } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
-  analyzeFirstManeuverTiming,
+  analyzeManeuverPoints,
   evaluateManeuverPlan,
+  getFreeWindAngle,
   getFreeWindTimeline,
   getRelativeGainDifferenceAtCommonTime,
+  getWindDecisionSnapshot,
   parseFreeScenarioConfig,
   runFreeScenario,
   serializeFreeScenarioConfig,
   type CourseLeg,
   type FreeScenarioConfig,
+  type ManeuverPointReview,
   type OpponentDecision,
   type OpponentMode,
-  type TimingAnalysis,
   type WindPattern,
   type WindTempo,
 } from "../domain/freeSimulation";
@@ -38,6 +40,7 @@ interface InitialFreeSetup {
 }
 
 const WIND_PATTERNS: Array<{ value: WindPattern; label: string; note: string }> = [
+  { value: "oscillating", label: "何度も振れる", note: "右→左→右の判断を繰り返す" },
   { value: "return", label: "平均へ戻る", note: "暫定ゲインが消える過程を見る" },
   { value: "hold", label: "振れたまま", note: "パーシステントシフトを試す" },
   { value: "return-past", label: "反対まで戻る", note: "有利側が逆転する場面を見る" },
@@ -62,10 +65,40 @@ const LEG_OPTIONS: Array<{ value: CourseLeg; label: string; action: string }> = 
 
 const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
   {
-    id: "oscillating-return",
-    label: "振れ戻りを待つ",
-    focus: "暫定ゲインが消え始める合図を探す",
-    tag: "上り・振れ戻り",
+    id: "oscillating-upwind",
+    label: "連続するヘダーを返す",
+    focus: "右→左→右の振れで、タックする窓を繰り返し探す",
+    tag: "上り・連続タック",
+    config: {
+      leg: "upwind",
+      shiftAngle: 12,
+      windPattern: "oscillating",
+      windTempo: "standard",
+      leverageBoatLengths: 14,
+      opponentMode: "hold",
+    },
+    planCue: "shiftStart",
+  },
+  {
+    id: "oscillating-downwind",
+    label: "下りのジャイブ窓",
+    focus: "上りと有利側が逆になる連続振れを読む",
+    tag: "下り・連続ジャイブ",
+    config: {
+      leg: "downwind",
+      shiftAngle: -12,
+      windPattern: "oscillating",
+      windTempo: "standard",
+      leverageBoatLengths: 16,
+      opponentMode: "hold",
+    },
+    planCue: "shiftStart",
+  },
+  {
+    id: "single-return",
+    label: "1回の振れ戻りを分解",
+    focus: "振れ始め・最大・戻り始めのどこで返すか比べる",
+    tag: "上り・基本",
     config: {
       leg: "upwind",
       shiftAngle: 12,
@@ -74,52 +107,22 @@ const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
       leverageBoatLengths: 14,
       opponentMode: "hold",
     },
-    planCue: "returnStart",
+    planCue: "peak",
   },
   {
     id: "persistent-shift",
-    label: "振れが残る海面",
-    focus: "戻る風と戻らない風で判断を分ける",
+    label: "戻らない風を見抜く",
+    focus: "振れを追い続けず、長いタックを選ぶ",
     tag: "上り・パーシステント",
     config: {
       leg: "upwind",
-      shiftAngle: -12,
+      shiftAngle: -14,
       windPattern: "hold",
       windTempo: "quick",
       leverageBoatLengths: 12,
       opponentMode: "hold",
     },
     planCue: "peak",
-  },
-  {
-    id: "cover-response",
-    label: "カバーとの間合い",
-    focus: "相手が2秒後に追うときの差を見る",
-    tag: "上り・2艇比較",
-    config: {
-      leg: "upwind",
-      shiftAngle: 8,
-      windPattern: "return",
-      windTempo: "slow",
-      leverageBoatLengths: 8,
-      opponentMode: "cover",
-    },
-    planCue: "peak",
-  },
-  {
-    id: "downwind-reversal",
-    label: "下りの有利側逆転",
-    focus: "平均を越す振れ戻りでジャイブを比べる",
-    tag: "下り・ジャイブ",
-    config: {
-      leg: "downwind",
-      shiftAngle: -14,
-      windPattern: "return-past",
-      windTempo: "standard",
-      leverageBoatLengths: 16,
-      opponentMode: "hold",
-    },
-    planCue: "returnStart",
   },
 ];
 
@@ -156,7 +159,7 @@ const getShiftLabel = (angle: number) => {
 };
 
 const getPatternLabel = (pattern: WindPattern) =>
-  WIND_PATTERNS.find((option) => option.value === pattern)?.label ?? "平均へ戻る";
+  WIND_PATTERNS.find((option) => option.value === pattern)?.label ?? "何度も振れる";
 
 const getOpponentLabel = (mode: OpponentMode) =>
   OPPONENT_MODES.find((option) => option.value === mode)?.label ?? "ミート先読み";
@@ -193,6 +196,19 @@ const getExplanation = (
   }
   if (opponentIsAvoiding) {
     return `ミートまで約${opponentDecision?.secondsToMeeting ?? "数"}秒。相手は今からタックすると安全余地がないため、${config.leg === "upwind" ? "ベアして" : "さらに下って"}自艇の後ろを通ります。`;
+  }
+  if (config.windPattern === "oscillating") {
+    const angle = getFreeWindAngle(time, config);
+    const earlierAngle = getFreeWindAngle(Math.max(0, time - 3), config);
+    const trend = angle - earlierAngle > 0.5
+      ? "右へ動いています"
+      : angle - earlierAngle < -0.5
+        ? "左へ動いています"
+        : "折り返し付近です";
+    if (Math.abs(angle) < 1.5) {
+      return `風は平均を通過中。${trend}。1回前の振れではなく、次にどちらへ動くかを見ます。`;
+    }
+    return `風は${angle > 0 ? "右" : "左"}${Math.abs(angle).toFixed(0)}°、${trend}。今のタック／ジャイブが有利側かを確認します。`;
   }
   if (time <= timeline.shiftStart) {
     return `まず${config.leverageBoatLengths}艇身の横の距離を確認。風が振れる前は、2艇の前後差はほぼありません。`;
@@ -302,20 +318,27 @@ function ManeuverPlan({
 }) {
   const timeline = getFreeWindTimeline(config);
   const maneuverLabel = config.leg === "upwind" ? "タック" : "ジャイブ";
-  const cues = [
-    { label: "振れ始め", time: timeline.shiftStart },
-    { label: "最大振れ", time: timeline.peak },
-    ...(config.windPattern === "hold"
-      ? []
-      : [{ label: "戻り始め", time: timeline.returnStart }]),
-  ];
+  const quarterCycle = timeline.peak - timeline.shiftStart;
+  const cues = config.windPattern === "oscillating"
+    ? [
+        { label: "最初の振れ始め", time: timeline.shiftStart },
+        { label: "最初の最大振れ", time: timeline.peak },
+        { label: "平均を反対へ通過", time: timeline.shiftStart + quarterCycle * 2 },
+      ]
+    : [
+        { label: "振れ始め", time: timeline.shiftStart },
+        { label: "最大振れ", time: timeline.peak },
+        ...(config.windPattern === "hold"
+          ? []
+          : [{ label: "戻り始め", time: timeline.returnStart }]),
+      ];
 
   return (
     <fieldset className="free-plan">
       <legend>7　走る前のプラン</legend>
       <div className="free-plan__tape" aria-hidden="true">PLAN → DO → REVIEW</div>
-      <h3>最初の{maneuverLabel}を、何秒に予定する？</h3>
-      <p>正解当てではありません。先に予定を置くと、風や相手を見て変えた判断をリプレイで説明できます。</p>
+      <h3>最初の{maneuverLabel}判断を、どこに置く？</h3>
+      <p>最初の予定は仮説です。走り始めた後は、何度も来る振れを見て、待つ／返すを判断します。</p>
       <div className="free-plan__cues" aria-label={`${maneuverLabel}予定の合図`}>
         {cues.map((cue) => (
           <button
@@ -509,55 +532,79 @@ function ReplayTransport({
   );
 }
 
-function TimingLab({
-  analysis,
-  maneuverLabel,
-}: {
-  analysis: TimingAnalysis;
-  maneuverLabel: string;
-}) {
-  const currentTrial = analysis.trials.find((trial) => trial.offset === 0)!;
-  const bestTrial = analysis.trials.find((trial) => trial.offset === analysis.bestOffset)!;
-  const advice = analysis.bestOffset === 0
-    ? `前後4秒にずらした試走の中では、今回の${currentTrial.maneuverTime}秒が最もよい結果でした。`
-    : analysis.bestOffset < 0
-      ? `この3試走では、${bestTrial.maneuverTime}秒まで${maneuverLabel}を早めると結果が改善しました。`
-      : `この3試走では、${bestTrial.maneuverTime}秒まで待ってから${maneuverLabel}すると結果が改善しました。`;
-  const multipleManeuverNote = currentTrial.maneuverTimes.length > 1
-    ? " 2回目以降も操作間隔を保ったまま、全体を4秒ずらしています。"
-    : "";
+const getManeuverPointCall = (review: ManeuverPointReview, leg: CourseLeg) => {
+  if (review.stateBefore === "neutral") return "平均付近。風だけでは根拠が弱い";
+  if (review.stateBefore === "unfavored" && review.stateAfter === "favored") {
+    return leg === "upwind" ? "ヘダーを返してリフト側へ" : "風下へ向ける側へジャイブ";
+  }
+  return leg === "upwind" ? "リフト側を手放した" : "風下へ向ける側を手放した";
+};
 
+const getTrialPositionLabel = (
+  reviewTime: number,
+  trialTime: number,
+  isCurrent: boolean,
+) => {
+  if (isCurrent) return "今回";
+  const delta = trialTime - reviewTime;
+  if (delta < 0) return `${Math.abs(delta)}秒早く`;
+  if (delta > 0) return `${delta}秒遅く`;
+  return "間隔なし";
+};
+
+function ManeuverPointLab({
+  reviews,
+  leg,
+  maneuverLabel,
+  onJump,
+}: {
+  reviews: ManeuverPointReview[];
+  leg: CourseLeg;
+  maneuverLabel: string;
+  onJump: (time: number) => void;
+}) {
+  if (reviews.length === 0) return null;
   return (
-    <section className="free-timing-lab" aria-labelledby="free-timing-heading">
-      <div className="section-kicker">TIMING LAB / 前後4秒を比べる</div>
-      <h3 id="free-timing-heading">最初の{maneuverLabel}は適切だった？</h3>
-      <p>{advice} マーク到達を優先し、外した場合はマークまでの距離、到達した場合は到達秒、その後に相手との差を比べています。{multipleManeuverNote}</p>
-      <div className="free-timing-ruler" role="table" aria-label={`${maneuverLabel}時刻の比較`}>
-        {analysis.trials.map((trial) => (
-          <div
-            key={trial.offset}
-            className={`free-timing-trial${trial.offset === 0 ? " is-current" : ""}${trial.offset === analysis.bestOffset ? " is-best" : ""}`}
-            role="row"
-          >
-            <span role="cell">
-              <small>{trial.offset === 0 ? "今回" : trial.offset < 0 ? "4秒早く" : "4秒遅く"}</small>
-              <strong>{trial.maneuverTime}秒</strong>
-            </span>
-            <span role="cell">
-              <small>マーク</small>
-              <strong>{getMarkResultLabel(trial.markResult)}</strong>
-              <em>{trial.markResult === "reached" ? `${trial.endTime}秒` : `残り${trial.markDistance.toFixed(1)}艇身`}</em>
-            </span>
-            <span role="cell">
-              <small>終了時の差</small>
-              <strong>{formatBoatDifference(trial.relativeGain)}</strong>
-            </span>
-            <span role="cell" className="free-timing-trial__best" aria-label={trial.offset === analysis.bestOffset ? "3試走の中で最良" : undefined}>
-              {trial.offset === analysis.bestOffset ? "BEST" : ""}
-            </span>
-          </div>
-        ))}
-      </div>
+    <section className="free-maneuver-lab" aria-labelledby="free-maneuver-lab-heading">
+      <div className="section-kicker">POINT LOG / 全操作を点検</div>
+      <h3 id="free-maneuver-lab-heading">すべての{maneuverLabel}ポイントを見る。</h3>
+      <p>各操作だけを前後4秒へ動かした仮想航跡と比べます。BESTはこの3試走内の結果で、唯一の正解ではありません。</p>
+      <ol>
+        {reviews.map((review) => {
+          const trendLabel = review.windTrend === "right" ? "右へ変化中" : review.windTrend === "left" ? "左へ変化中" : "折り返し付近";
+          const bestTrial = review.trials.find((trial) => trial.offset === review.bestOffset)!;
+          const bestPosition = getTrialPositionLabel(review.time, bestTrial.maneuverTime, review.bestOffset === 0);
+          const bestLabel = bestPosition.endsWith("遅く") ? bestPosition.replace("遅く", "待つ") : bestPosition;
+          return (
+            <li key={`${review.maneuverNumber}-${review.time}`}>
+              <div className="free-maneuver-point__heading">
+                <span>POINT {String(review.maneuverNumber).padStart(2, "0")}</span>
+                <strong>{review.time}秒｜{getManeuverPointCall(review, leg)}</strong>
+              </div>
+              <dl>
+                <div><dt>風</dt><dd>{getShiftLabel(Math.round(review.windAngle))}</dd></div>
+                <div><dt>変化</dt><dd>{trendLabel}</dd></div>
+                <div><dt>前 → 後</dt><dd>{review.tackBefore === "port" ? "ポート" : "スターボード"} → {review.tackAfter === "port" ? "ポート" : "スターボード"}</dd></div>
+                <div><dt>前回から</dt><dd>{review.secondsSincePrevious === null ? "最初" : `${review.secondsSincePrevious}秒`}</dd></div>
+              </dl>
+              <div className="free-maneuver-point__trials" aria-label={`${review.maneuverNumber}回目の${maneuverLabel}を前後4秒で比較`}>
+                {review.trials.map((trial) => (
+                  <span key={trial.offset} className={`${trial.offset === 0 ? "is-current " : ""}${trial.offset === review.bestOffset ? "is-best" : ""}`}>
+                    <small>{getTrialPositionLabel(review.time, trial.maneuverTime, trial.offset === 0)}</small>
+                    <strong>{trial.maneuverTime}秒</strong>
+                    <em>{getMarkResultLabel(trial.markResult)}｜{formatBoatDifference(trial.relativeGain)}</em>
+                  </span>
+                ))}
+              </div>
+              <p className="free-maneuver-point__call">この3試走の焦点：<strong>{bestLabel}</strong></p>
+              {review.secondsSincePrevious !== null && review.secondsSincePrevious <= 5 ? (
+                <p className="free-maneuver-point__warning">回復直後の連続操作です。小さな振れを追い過ぎていないか確認します。</p>
+              ) : null}
+              <button type="button" onClick={() => onJump(review.time)}>このポイントをリプレイ</button>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }
@@ -649,6 +696,42 @@ function FreeWindStrip({
   );
 }
 
+function ShiftDecisionBar({
+  config,
+  time,
+  tack,
+}: {
+  config: FreeScenarioConfig;
+  time: number;
+  tack: "port" | "starboard";
+}) {
+  const snapshot = getWindDecisionSnapshot(config, time, tack);
+  const trendLabel = snapshot.windTrend === "right"
+    ? "右へ動く"
+    : snapshot.windTrend === "left"
+      ? "左へ動く"
+      : "折り返し";
+  const stateLabel = snapshot.state === "neutral"
+    ? "平均付近"
+    : snapshot.state === "favored"
+      ? config.leg === "upwind" ? "リフト側" : "風下へ向ける側"
+      : config.leg === "upwind" ? "ヘダー側" : "横へ逃げる側";
+  const call = snapshot.state === "neutral"
+    ? "次の動きを待つ"
+    : snapshot.state === "favored"
+      ? "細かな振れを追わず維持"
+      : `今、${config.leg === "upwind" ? "タック" : "ジャイブ"}する根拠あり`;
+  return (
+    <section className={`free-decision-bar is-${snapshot.state}`} aria-label="現在のタックまたはジャイブ判断" aria-live="polite">
+      <span><small>WIND MOVE</small><strong>{trendLabel}</strong></span>
+      <i aria-hidden="true">→</i>
+      <span><small>NOW</small><strong>{stateLabel}</strong></span>
+      <i aria-hidden="true">→</i>
+      <span><small>CALL</small><strong>{call}</strong></span>
+    </section>
+  );
+}
+
 function FreeSetup({
   config,
   plannedTime,
@@ -671,8 +754,8 @@ function FreeSetup({
 
   return (
     <section className="free-setup" aria-labelledby="free-setup-heading">
-      <div className="section-kicker">SET SEA / 海面をつくる</div>
-      <h2 id="free-setup-heading">今日、何を見分ける？</h2>
+      <div className="section-kicker">SET SHIFT / 判断窓をつくる</div>
+      <h2 id="free-setup-heading">どの振れで返す？</h2>
 
       <DrillIndex config={config} onSelect={selectPreset} />
 
@@ -721,7 +804,7 @@ function FreeSetup({
       </fieldset>
 
       <fieldset className="free-control-group">
-        <legend>4　その後の風</legend>
+        <legend>4　風は何回動く？</legend>
         <ChoiceButtons
           name="その後の風"
           options={WIND_PATTERNS}
@@ -771,11 +854,11 @@ function FreeSetup({
       <ShareScenario config={config} loadedFromSharedLink={loadedFromSharedLink} />
 
       <div className="free-start-note">
-        <strong>正解の秒数は表示しません。</strong>
-        <p>予定と実行が違っても失敗ではありません。「何を見て変えたか」を操作なしの航跡と比べます。</p>
+        <strong>1回目だけで終わりません。</strong>
+        <p>風が次に反対へ動いたら、もう一度、今の走りが有利かを判断します。リプレイは全操作を残します。</p>
       </div>
       <button type="button" className="primary-action" onClick={onStart}>
-        この海面で走る <span aria-hidden="true">→</span>
+        判断点を探しに出る <span aria-hidden="true">→</span>
       </button>
     </section>
   );
@@ -806,15 +889,16 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   );
   const setupReplay = useMemo(() => runFreeScenario(draftConfig, []), [draftConfig]);
   const baseline = useMemo(() => runFreeScenario(activeConfig, []), [activeConfig]);
-  const timingAnalysis = useMemo(
-    () => analyzeFirstManeuverTiming(activeConfig, userManeuverTimes),
+  const maneuverReviews = useMemo(
+    () => analyzeManeuverPoints(activeConfig, userManeuverTimes),
     [activeConfig, userManeuverTimes],
   );
   const bestTimingReplay = useMemo(() => {
-    if (!timingAnalysis || timingAnalysis.bestOffset === 0) return null;
-    const bestTrial = timingAnalysis.trials.find((trial) => trial.offset === timingAnalysis.bestOffset)!;
+    const firstReview = maneuverReviews[0];
+    if (!firstReview || firstReview.bestOffset === 0) return null;
+    const bestTrial = firstReview.trials.find((trial) => trial.offset === firstReview.bestOffset)!;
     return runFreeScenario(activeConfig, bestTrial.maneuverTimes);
-  }, [activeConfig, timingAnalysis]);
+  }, [activeConfig, maneuverReviews]);
   const comparisons = useMemo<CourseComparison[]>(
     () => phase === "replay"
       ? [
@@ -823,12 +907,12 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
             ? [{
                 replay: bestTimingReplay,
                 variant: "coach" as const,
-                label: timingAnalysis?.bestOffset === -4 ? "4秒早い試走" : "4秒遅い試走",
+                label: maneuverReviews[0]?.bestOffset === -4 ? "最初を4秒早く" : "最初を4秒遅く",
               }]
             : []),
         ]
       : [],
-    [baseline, bestTimingReplay, phase, timingAnalysis?.bestOffset],
+    [baseline, bestTimingReplay, maneuverReviews, phase],
   );
 
   useEffect(() => {
@@ -934,16 +1018,19 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     <div className={`free-simulation free-simulation--${phase}`}>
       <section className="lesson-heading free-heading">
         <div>
-          <div className="section-kicker">OPEN WATER / FREE SAIL</div>
-          <h1>海面を、<br />自分でつくる。</h1>
+          <div className="section-kicker">SHIFT LAB / TACK &amp; GYBE POINT</div>
+          <h1>風が動く。<br />どこで返す？</h1>
         </div>
-        <p>風と相手の条件を変え、タックやジャイブを何度でも試します。点数ではなく、操作なしとの差から考えます。</p>
+        <p>右、左、また右へ。何度も振れる海面で、待つか返すかを繰り返し判断します。リプレイでは、すべてのタック／ジャイブポイントを個別に比べます。</p>
       </section>
 
       <FreeWindStrip config={displayConfig} time={displayTime} windAngles={windAngles} />
 
       <div className="free-workspace">
         <div className="free-workspace__course">
+          {phase !== "setup" ? (
+            <ShiftDecisionBar config={displayConfig} time={displayTime} tack={currentFrame.user.tack} />
+          ) : null}
           <CourseBoard
             frame={currentFrame}
             replay={displayReplay}
@@ -1062,7 +1149,7 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 max={replay.endTime}
                 step="1"
                 value={time}
-                aria-label="フリーシミュレーションのリプレイ時刻"
+                aria-label="SHIFT LABのリプレイ時刻"
                 onChange={(event) => {
                   setIsReplayPlaying(false);
                   setTime(Number(event.target.value));
@@ -1108,9 +1195,15 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 <span className="coach-note__tape">この時点</span>
                 <p>{currentExplanation}</p>
               </div>
-              {timingAnalysis ? (
-                <TimingLab analysis={timingAnalysis} maneuverLabel={maneuverLabel} />
-              ) : null}
+              <ManeuverPointLab
+                reviews={maneuverReviews}
+                leg={activeConfig.leg}
+                maneuverLabel={maneuverLabel}
+                onJump={(pointTime) => {
+                  setIsReplayPlaying(false);
+                  setTime(pointTime);
+                }}
+              />
               <div className="free-replay-actions">
                 <button type="button" className="primary-action" onClick={() => start(activeConfig, activePlannedTime)}>同じ条件でもう一度</button>
                 <button type="button" className="secondary-action" onClick={changeConditions}>条件を変える</button>

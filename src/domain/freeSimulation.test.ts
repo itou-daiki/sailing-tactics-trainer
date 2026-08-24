@@ -3,6 +3,7 @@ import {
   DEFAULT_FREE_CONFIG,
   FREE_SCENARIO_MAX_DURATION,
   analyzeFirstManeuverTiming,
+  analyzeShiftTimingChoice,
   analyzeManeuverPoints,
   analyzeWinningRoute,
   evaluateManeuverPlan,
@@ -363,6 +364,33 @@ describe("フリーシミュレーション", () => {
     expect(analysis?.trials.map((trial) => trial.offset)).toEqual([-4, 0, 4]);
     expect(analysis?.trials.map((trial) => trial.maneuverTime)).toEqual([10, 14, 18]);
     expect([-4, 0, 4]).toContain(analysis?.bestOffset);
+  });
+
+  it("振れを観測した直後と最大振れの操作を、同じ時刻の相手との差で比べる", () => {
+    const analysis = analyzeShiftTimingChoice(config({
+      shiftAngle: 12,
+      windPattern: "return",
+      windTempo: "standard",
+      opponentMode: "hold",
+    }));
+
+    expect(analysis.onset.maneuverTime).toBe(5);
+    expect(analysis.peak.maneuverTime).toBe(10);
+    expect(analysis.onset.windAngle).toBeCloseTo(2);
+    expect(analysis.peak.windAngle).toBe(12);
+    expect(analysis.comparisonTime).toBe(16);
+    expect(Number.isFinite(analysis.onset.relativeGain)).toBe(true);
+    expect(Number.isFinite(analysis.peak.relativeGain)).toBe(true);
+  });
+
+  it("今のタックがリフトされる振れでは、早いか遅いかを比べる前に走り続ける", () => {
+    const analysis = analyzeShiftTimingChoice(config({
+      leg: "upwind",
+      shiftAngle: -12,
+      windPattern: "return",
+    }));
+
+    expect(analysis.recommendation).toBe("hold");
   });
 
   it("複数回操作した場合は、操作間隔を保って全体を前後へずらす", () => {

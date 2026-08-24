@@ -95,6 +95,28 @@ export interface TimingAnalysis {
   trials: TimingTrial[];
 }
 
+export type ShiftTimingChoice = "onset" | "peak";
+export type ShiftTimingRecommendation = ShiftTimingChoice | "close" | "hold";
+
+export interface ShiftTimingTrial {
+  choice: ShiftTimingChoice;
+  maneuverTime: number;
+  windAngle: number;
+  relativeGain: number;
+  maneuverLoss: number;
+  markResult: MarkResult;
+  endTime: number;
+  markDistance: number;
+}
+
+export interface ShiftTimingAnalysis {
+  onset: ShiftTimingTrial;
+  peak: ShiftTimingTrial;
+  comparisonTime: number;
+  gainDifference: number;
+  recommendation: ShiftTimingRecommendation;
+}
+
 export type WindTrend = "left" | "steady" | "right";
 export type SailingShiftState = "favored" | "neutral" | "unfavored";
 export type ManeuverReason = "wind" | "opponent" | "mark";
@@ -910,6 +932,50 @@ export function analyzeFirstManeuverTiming(
   const bestTrial = [...trials].sort(compareTimingTrials)[0];
 
   return { bestOffset: bestTrial.offset, trials };
+}
+
+export function analyzeShiftTimingChoice(config: FreeScenarioConfig): ShiftTimingAnalysis {
+  const timeline = getFreeWindTimeline(config);
+  // At shiftStart the model is still on the mean wind direction. One second
+  // later is the first visible change a sailor can actually react to.
+  const onsetTime = Math.min(timeline.shiftStart + 1, timeline.peak);
+  const onsetReplay = runFreeScenario(config, [onsetTime]);
+  const peakReplay = runFreeScenario(config, [timeline.peak]);
+  const comparisonTime = Math.min(
+    timeline.returnStart,
+    onsetReplay.endTime,
+    peakReplay.endTime,
+  );
+
+  const toTrial = (
+    choice: ShiftTimingChoice,
+    maneuverTime: number,
+    replay: FreeScenarioReplay,
+  ): ShiftTimingTrial => ({
+    choice,
+    maneuverTime,
+    windAngle: getFreeWindAngle(maneuverTime, config),
+    relativeGain: replay.frames[comparisonTime].relativeGain / BOAT_LENGTH_PX,
+    maneuverLoss: replay.userManeuverLoss,
+    markResult: replay.markResult,
+    endTime: replay.endTime,
+    markDistance: replay.markDistance,
+  });
+
+  const onset = toTrial("onset", onsetTime, onsetReplay);
+  const peak = toTrial("peak", timeline.peak, peakReplay);
+  const gainDifference = onset.relativeGain - peak.relativeGain;
+  const favoredTack = getFavoredTack(config.leg, onset.windAngle);
+  const initialTack = getTack(0, []);
+  const recommendation: ShiftTimingRecommendation = favoredTack === null || favoredTack === initialTack
+    ? "hold"
+    : Math.abs(gainDifference) < 0.3
+      ? "close"
+      : gainDifference > 0
+        ? "onset"
+        : "peak";
+
+  return { onset, peak, comparisonTime, gainDifference, recommendation };
 }
 
 const getFavoredTack = (

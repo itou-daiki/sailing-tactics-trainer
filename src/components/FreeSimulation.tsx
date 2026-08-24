@@ -4,6 +4,7 @@ import { BOAT_LENGTH_PX, type BlanketState } from "../domain/simulation";
 import {
   DEFAULT_FREE_CONFIG,
   analyzeManeuverPoints,
+  analyzeShiftTimingChoice,
   analyzeWinningRoute,
   evaluateManeuverPlan,
   getFreeWindAngle,
@@ -21,6 +22,7 @@ import {
   type ManeuverReasonCall,
   type OpponentDecision,
   type OpponentMode,
+  type ShiftTimingAnalysis,
   type WinningRouteAnalysis,
   type WindPattern,
   type WindTempo,
@@ -38,7 +40,7 @@ import {
 
 type FreePhase = "setup" | "playing" | "replay";
 
-type PlanCue = "shiftStart" | "peak" | "returnStart";
+type PlanCue = "shiftObserved" | "peak" | "returnStart";
 
 interface FreeDrillPreset {
   id: string;
@@ -102,6 +104,21 @@ const readPracticeHistory = (): PracticeHistory => {
 
 const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
   {
+    id: "shift-onset-or-peak",
+    label: "振れ始めと最大振れを比べる",
+    focus: "早く返す利益と、待つ間のヘダー／操作ロスを同じ海面で比べる",
+    tag: "上り・タイミング比較",
+    config: {
+      leg: "upwind",
+      shiftAngle: 12,
+      windPattern: "return",
+      windTempo: "slow",
+      leverageBoatLengths: 12,
+      opponentMode: "fixed",
+    },
+    planCue: "shiftObserved",
+  },
+  {
     id: "oscillating-upwind",
     label: "連続するヘダーでタックする",
     focus: "右→左→右と振れる中で、タックするタイミングを判断する",
@@ -114,7 +131,7 @@ const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
       leverageBoatLengths: 14,
       opponentMode: "hold",
     },
-    planCue: "shiftStart",
+    planCue: "shiftObserved",
   },
   {
     id: "oscillating-downwind",
@@ -129,7 +146,7 @@ const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
       leverageBoatLengths: 16,
       opponentMode: "hold",
     },
-    planCue: "shiftStart",
+    planCue: "shiftObserved",
   },
   {
     id: "single-return",
@@ -174,8 +191,12 @@ const readInitialFreeSetup = (): InitialFreeSetup => {
   };
 };
 
-const getPresetPlanTime = (preset: FreeDrillPreset) =>
-  getFreeWindTimeline(preset.config)[preset.planCue];
+const getPresetPlanTime = (preset: FreeDrillPreset) => {
+  const timeline = getFreeWindTimeline(preset.config);
+  return preset.planCue === "shiftObserved"
+    ? Math.min(timeline.shiftStart + 1, timeline.peak)
+    : timeline[preset.planCue];
+};
 
 const isSameConfig = (left: FreeScenarioConfig, right: FreeScenarioConfig) =>
   serializeFreeScenarioConfig(left) === serializeFreeScenarioConfig(right);
@@ -192,7 +213,11 @@ const buildScenarioShareUrl = (config: FreeScenarioConfig) => {
 
 const getShiftLabel = (angle: number) => {
   if (angle === 0) return "振れなし 0°";
-  return `${angle > 0 ? "右" : "左"}${Math.abs(angle)}°`;
+  const absoluteAngle = Math.abs(angle);
+  const displayAngle = Number.isInteger(absoluteAngle)
+    ? absoluteAngle.toFixed(0)
+    : absoluteAngle.toFixed(1);
+  return `${angle > 0 ? "右" : "左"}${displayAngle}°`;
 };
 
 const getPatternLabel = (pattern: WindPattern) =>
@@ -363,14 +388,15 @@ function ManeuverPlan({
   const timeline = getFreeWindTimeline(config);
   const maneuverLabel = config.leg === "upwind" ? "タック" : "ジャイブ";
   const quarterCycle = timeline.peak - timeline.shiftStart;
+  const shiftObserved = Math.min(timeline.shiftStart + 1, timeline.peak);
   const cues = config.windPattern === "oscillating"
     ? [
-        { label: "最初の振れ始め", time: timeline.shiftStart },
+        { label: "最初の振れを確認", time: shiftObserved },
         { label: "最初の最大振れ", time: timeline.peak },
         { label: "平均を反対へ通過", time: timeline.shiftStart + quarterCycle * 2 },
       ]
     : [
-        { label: "振れ始め", time: timeline.shiftStart },
+        { label: "振れ始めを確認", time: shiftObserved },
         { label: "最大振れ", time: timeline.peak },
         ...(config.windPattern === "hold"
           ? []
@@ -397,6 +423,9 @@ function ManeuverPlan({
           </button>
         ))}
       </div>
+      <p className="free-plan__timing-note">
+        振れ始めで返すとヘダーを走る時間は短くなります。ただし、振れが小さいうちに{maneuverLabel}の艇速ロスを払います。最大まで待つと振れを確認できますが、待つ間はヘダーを走ります。
+      </p>
       <div className="free-plan__range">
         <label htmlFor="free-plan-time">自分で時刻を調整</label>
         <output htmlFor="free-plan-time">{plannedTime}秒</output>
@@ -477,6 +506,91 @@ function ShareScenario({
           onFocus={(event) => event.currentTarget.select()}
         />
       ) : null}
+    </section>
+  );
+}
+
+function ShiftTimingComparison({
+  analysis,
+  maneuverLabel,
+  actualTime,
+  onPractice,
+}: {
+  analysis: ShiftTimingAnalysis;
+  maneuverLabel: string;
+  actualTime: number | undefined;
+  onPractice: (plannedTime: number) => void;
+}) {
+  const onsetAdvantage = analysis.gainDifference;
+  const lead = Math.abs(onsetAdvantage);
+  const leadLabel = lead < 0.05 ? "ほぼ0艇身" : `${lead.toFixed(1)}艇身`;
+  const recommendation = analysis.recommendation === "hold"
+    ? "この振れは今の走りをリフトしています。早い／遅いを比べる前に、今のタックを続けます。"
+    : analysis.recommendation === "close"
+      ? `差は${leadLabel}です。この海面ではほぼ互角です。風圧、波、相手、マーク位置を次の判断材料にします。`
+      : analysis.recommendation === "onset"
+        ? `振れを確認してすぐ返す方が、${analysis.comparisonTime}秒時点で${leadLabel}前です。ヘダーを長く走らない利益が残りました。`
+        : `最大振れまで待つ方が、${analysis.comparisonTime}秒時点で${leadLabel}前です。今回は小さい振れで払う${maneuverLabel}ロスを、待つことで避けられました。`;
+  const actualChoice = actualTime === undefined
+    ? null
+    : Math.abs(actualTime - analysis.onset.maneuverTime)
+        <= Math.abs(actualTime - analysis.peak.maneuverTime)
+      ? "onset"
+      : "peak";
+
+  return (
+    <section className="free-shift-timing" aria-labelledby="free-shift-timing-heading">
+      <div className="section-kicker">EARLY OR PEAK / いつ返す？</div>
+      <div className="free-shift-timing__heading">
+        <h3 id="free-shift-timing-heading">振れ始めと最大振れを直接比べる</h3>
+        <span>{analysis.comparisonTime}秒で比較</span>
+      </div>
+      <p className="free-shift-timing__method">
+        同じ風、同じ相手、同じ艇間距離で、最初の{maneuverLabel}時刻だけを変えた仮想試走です。
+      </p>
+      <div className="free-shift-timing__trials">
+        {[analysis.onset, analysis.peak].map((trial) => {
+          const isRecommended = analysis.recommendation === trial.choice;
+          const isActual = actualChoice === trial.choice;
+          const label = trial.choice === "onset" ? "振れ始めを確認" : "最大振れまで待つ";
+          return (
+            <article
+              key={trial.choice}
+              className={isRecommended ? "is-recommended" : ""}
+              aria-label={`${label}場合の結果`}
+            >
+              <header>
+                <span>{label}</span>
+                <strong>{trial.maneuverTime}秒</strong>
+              </header>
+              <dl>
+                <div><dt>その時の風</dt><dd>{getShiftLabel(trial.windAngle)}</dd></div>
+                <div><dt>相手との差</dt><dd>{formatBoatDifference(trial.relativeGain)}</dd></div>
+                <div><dt>{maneuverLabel}ロス</dt><dd>{formatManeuverLoss(trial.maneuverLoss)}</dd></div>
+              </dl>
+              <div className="free-shift-timing__flags">
+                {isRecommended ? <span>この条件の候補</span> : null}
+                {isActual ? <span>今回に近い</span> : null}
+              </div>
+              <button type="button" onClick={() => onPractice(trial.maneuverTime)}>
+                {label}予定で再走する
+              </button>
+            </article>
+          );
+        })}
+      </div>
+      <div className={`free-shift-timing__call free-shift-timing__call--${analysis.recommendation}`}>
+        <strong>{analysis.recommendation === "hold" ? "まず、リフトかヘダーかを確認" : "この条件の比較結果"}</strong>
+        <p>{recommendation}</p>
+      </div>
+      <ol className="free-shift-timing__checklist">
+        <li><span>1</span>今のタックはヘダーか</li>
+        <li><span>2</span>振れ幅で操作ロスを回収できるか</li>
+        <li><span>3</span>相手・マーク・風圧で優先が変わるか</li>
+      </ol>
+      <small className="free-shift-timing__model-note">
+        420の教育用モデル内の比較です。実艇では波、クルーワーク、タック後の加速によって差が変わります。
+      </small>
     </section>
   );
 }
@@ -1241,6 +1355,10 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     () => phase === "replay" ? analyzeWinningRoute(activeConfig, userManeuverTimes) : null,
     [activeConfig, phase, userManeuverTimes],
   );
+  const shiftTimingAnalysis = useMemo(
+    () => phase === "replay" ? analyzeShiftTimingChoice(activeConfig) : null,
+    [activeConfig, phase],
+  );
   const winningRouteReplay = useMemo(() => {
     if (!winningRouteAnalysis
       || winningRouteAnalysis.status === "already-winning"
@@ -1362,6 +1480,13 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     setDraftConfig(nextConfig);
     setDraftPlannedTime(nextPlannedTime);
     start(nextConfig, nextPlannedTime);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const startShiftTimingPractice = (plannedTime: number) => {
+    setDraftConfig(activeConfig);
+    setDraftPlannedTime(plannedTime);
+    start(activeConfig, plannedTime);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -1567,6 +1692,15 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                 maneuverTimes={userManeuverTimes}
                 maneuverLabel={maneuverLabel}
               />
+
+              {shiftTimingAnalysis ? (
+                <ShiftTimingComparison
+                  analysis={shiftTimingAnalysis}
+                  maneuverLabel={maneuverLabel}
+                  actualTime={userManeuverTimes[0]}
+                  onPractice={startShiftTimingPractice}
+                />
+              ) : null}
 
               <input
                 className="timeline-slider"

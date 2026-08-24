@@ -438,6 +438,31 @@ h1 { margin: 7px 0 0; font-size: clamp(2rem, 9vw, 4.9rem); line-height: .99; let
 .free-plan-review__question { display: grid; gap: 3px; padding: 10px 11px; border-left: 5px solid var(--wind); background: #fffef5; }
 .free-plan-review__question strong { font-size: .62rem; }
 .free-plan-review__question span { color: var(--graphite); font-size: .67rem; line-height: 1.5; }
+.free-practice-progress { margin: 24px 0 18px; padding: 17px 0 16px; border-top: 5px solid var(--sea-deep); border-bottom: 2px solid var(--ink); }
+.free-practice-progress__heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 7px 0 13px; }
+.free-practice-progress__heading h3 { margin: 0; font-size: 1.16rem; line-height: 1.35; }
+.free-practice-progress__heading > span { flex: none; padding: 5px 7px; color: var(--sail); background: var(--sea-deep); font: 800 .56rem/1 "Arial Narrow", "BIZ UDPGothic", sans-serif; }
+.free-practice-progress__current { display: grid; grid-template-columns: 1.25fr .75fr .85fr; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.free-practice-progress__current > div { min-width: 0; padding: 11px 8px; }
+.free-practice-progress__current > div:not(:first-child) { border-left: 1px solid var(--rule); }
+.free-practice-progress__current span, .free-practice-progress__current strong { display: block; }
+.free-practice-progress__current span { color: var(--graphite); font-size: .58rem; font-weight: 800; line-height: 1.4; }
+.free-practice-progress__current strong { margin-top: 5px; font: 800 1.08rem/1.1 "Arial Narrow", "BIZ UDPGothic", sans-serif; }
+.free-practice-progress__current strong small { font-size: .65rem; }
+.free-practice-progress__history { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 0 14px; padding: 0; list-style: none; border-left: 1px solid var(--rule); }
+.free-practice-progress__history li { min-width: 0; padding: 8px 7px; border-right: 1px solid var(--rule); }
+.free-practice-progress__history span, .free-practice-progress__history strong, .free-practice-progress__history small { display: block; }
+.free-practice-progress__history span { color: var(--sea-deep); font: 800 .52rem/1 "Arial Narrow", "BIZ UDPGothic", sans-serif; }
+.free-practice-progress__history strong { margin-top: 5px; overflow: hidden; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.free-practice-progress__history small { margin-top: 4px; color: var(--graphite); font-size: .52rem; line-height: 1.3; }
+.free-practice-progress__next { padding: 13px 12px; border-left: 7px solid var(--wind); background: #fffef5; }
+.free-practice-progress__next--transfer { border-left-color: var(--good); background: #edf7f2; }
+.free-practice-progress__next > span, .free-practice-progress__next > strong { display: block; }
+.free-practice-progress__next > span { color: var(--sea-deep); font: 800 .55rem/1 "Arial Narrow", "BIZ UDPGothic", sans-serif; letter-spacing: .08em; }
+.free-practice-progress__next > strong { margin-top: 6px; font-size: .82rem; line-height: 1.4; }
+.free-practice-progress__next p { margin: 6px 0 12px; color: var(--graphite); font-size: .66rem; line-height: 1.65; }
+.free-practice-progress__next .primary-action { min-height: 50px; padding: 0 14px; font-size: .72rem; }
+.free-practice-progress__storage { display: block; margin-top: 9px; color: var(--graphite); font-size: .52rem; line-height: 1.55; }
 .free-mark-result { display: grid; gap: 5px; margin-bottom: 18px; padding: 13px 12px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); border-left: 7px solid var(--good); }
 .free-mark-result--missed, .free-mark-result--timeout { border-left-color: var(--signal); }
 .free-mark-result span { color: var(--graphite); font: 800 .6rem/1 "Arial Narrow", sans-serif; letter-spacing: .11em; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CourseBoard, type CourseComparison } from "./CourseBoard";
 import { BOAT_LENGTH_PX, type BlanketState } from "../domain/simulation";
 import {
@@ -25,6 +25,16 @@ import {
   type WindPattern,
   type WindTempo,
 } from "../domain/freeSimulation";
+import {
+  EMPTY_PRACTICE_HISTORY,
+  PRACTICE_HISTORY_STORAGE_KEY,
+  createPracticeAttempt,
+  getPracticeRecommendation,
+  parsePracticeHistory,
+  recordPracticeAttempt,
+  type PracticeHistory,
+  type PracticeRecommendation,
+} from "../domain/practiceHistory";
 
 type FreePhase = "setup" | "playing" | "replay";
 
@@ -81,6 +91,14 @@ const MANEUVER_REASON_OPTIONS: Array<{
 
 const getReasonLabel = (reason: ManeuverReason | null) =>
   MANEUVER_REASON_OPTIONS.find((option) => option.value === reason)?.label ?? "記録なし";
+
+const readPracticeHistory = (): PracticeHistory => {
+  try {
+    return parsePracticeHistory(window.localStorage.getItem(PRACTICE_HISTORY_STORAGE_KEY));
+  } catch {
+    return EMPTY_PRACTICE_HISTORY;
+  }
+};
 
 const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
   {
@@ -500,6 +518,73 @@ function PlanReview({
         <strong>次に決めること</strong>
         <span>「予定を守る」か「見る合図を変える」か、どちらか1つ。</span>
       </div>
+    </section>
+  );
+}
+
+function PracticeProgress({
+  history,
+  recommendation,
+  onStartNext,
+}: {
+  history: PracticeHistory;
+  recommendation: PracticeRecommendation | null;
+  onStartNext: () => void;
+}) {
+  const current = history.attempts.at(-1);
+  if (!current || !recommendation) return null;
+
+  const recentAttempts = history.attempts.slice(-3).reverse();
+  return (
+    <section className="free-practice-progress" aria-labelledby="free-practice-progress-heading" aria-live="polite">
+      <div className="section-kicker">PRACTICE LOG / この端末の記録</div>
+      <div className="free-practice-progress__heading">
+        <h3 id="free-practice-progress-heading">今回の判断と次の練習</h3>
+        <span>{history.attempts.length}回目</span>
+      </div>
+      <div className="free-practice-progress__current">
+        <div>
+          <span>根拠が確認できた操作</span>
+          <strong>
+            {current.maneuverCount === 0
+              ? "操作なし"
+              : <>{current.supportedCallCount}<small> / {current.maneuverCount}回</small></>}
+          </strong>
+        </div>
+        <div>
+          <span>マーク</span>
+          <strong>{getMarkResultLabel(current.markResult)}</strong>
+        </div>
+        <div>
+          <span>相手との差</span>
+          <strong className={current.relativeGain >= 0 ? "gain-positive" : "gain-negative"}>
+            {formatBoatDifference(current.relativeGain)}
+          </strong>
+        </div>
+      </div>
+      <ol className="free-practice-progress__history" aria-label="直近3回の練習記録">
+        {recentAttempts.map((item, index) => (
+          <li key={`${item.completedAt}-${index}`}>
+            <span>{history.attempts.length - index}回目</span>
+            <strong>{getMarkResultLabel(item.markResult)}</strong>
+            <small>
+              {item.maneuverCount === 0
+                ? "操作なし"
+                : `根拠あり ${item.supportedCallCount}/${item.maneuverCount}回`}
+              {` ｜ 相手差 ${formatBoatDifference(item.relativeGain)}`}
+            </small>
+          </li>
+        ))}
+      </ol>
+      <div className={`free-practice-progress__next free-practice-progress__next--${recommendation.mode}`}>
+        <span>NEXT / 次に試すこと</span>
+        <strong>{recommendation.heading}</strong>
+        <p>{recommendation.detail}</p>
+        <button type="button" className="primary-action" onClick={onStartNext}>
+          {recommendation.buttonLabel}
+        </button>
+      </div>
+      <small className="free-practice-progress__storage">練習記録はこの端末だけに最大8回保存します。名前や位置情報は記録しません。</small>
     </section>
   );
 }
@@ -1139,6 +1224,9 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const [maneuverReasonCalls, setManeuverReasonCalls] = useState<ManeuverReasonCall[]>([]);
   const [reasonPromptTime, setReasonPromptTime] = useState<number | null>(null);
   const [resumeAfterReason, setResumeAfterReason] = useState(false);
+  const [practiceHistory, setPracticeHistory] = useState<PracticeHistory>(readPracticeHistory);
+  const activeRunId = useRef(0);
+  const recordedRunId = useRef<number | null>(null);
   const replay = useMemo(
     () => runFreeScenario(activeConfig, userManeuverTimes),
     [activeConfig, userManeuverTimes],
@@ -1162,6 +1250,10 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
       )) return null;
     return runFreeScenario(activeConfig, winningRouteAnalysis.recommended.maneuverTimes);
   }, [activeConfig, winningRouteAnalysis]);
+  const practiceRecommendation = useMemo(
+    () => getPracticeRecommendation(practiceHistory),
+    [practiceHistory],
+  );
   const comparisons = useMemo<CourseComparison[]>(
     () => phase === "replay"
       ? [
@@ -1201,7 +1293,25 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     return () => window.clearTimeout(timer);
   }, [isReplayPlaying, phase, replay.endTime, replaySpeed, time]);
 
+  useEffect(() => {
+    if (phase !== "replay" || recordedRunId.current === activeRunId.current) return;
+    recordedRunId.current = activeRunId.current;
+    const attempt = createPracticeAttempt(activeConfig, maneuverReviews, replay);
+    const nextHistory = recordPracticeAttempt(practiceHistory, attempt);
+    setPracticeHistory(nextHistory);
+    // localStorage is used only as an on-device practice log. Browsers may deny
+    // storage, so the current session continues even when persistence fails.
+    // Source: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
+    try {
+      window.localStorage.setItem(PRACTICE_HISTORY_STORAGE_KEY, JSON.stringify(nextHistory));
+    } catch {
+      // The in-memory history still supports the next practice decision.
+    }
+  }, [activeConfig, maneuverReviews, phase, practiceHistory, replay]);
+
   const start = (config = draftConfig, plannedTime = draftPlannedTime) => {
+    activeRunId.current += 1;
+    recordedRunId.current = null;
     setActiveConfig({ ...config });
     setActivePlannedTime(plannedTime);
     setTime(0);
@@ -1240,6 +1350,18 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     setReasonPromptTime(null);
     setIsReplayPlaying(false);
     setPhase("setup");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const startRecommendedPractice = () => {
+    if (!practiceRecommendation) return;
+    const nextConfig = practiceRecommendation.config;
+    const nextPlannedTime = isSameConfig(nextConfig, activeConfig)
+      ? activePlannedTime
+      : getFreeWindTimeline(nextConfig).peak;
+    setDraftConfig(nextConfig);
+    setDraftPlannedTime(nextPlannedTime);
+    start(nextConfig, nextPlannedTime);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -1510,8 +1632,12 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
                   setTime(pointTime);
                 }}
               />
+              <PracticeProgress
+                history={practiceHistory}
+                recommendation={practiceRecommendation}
+                onStartNext={startRecommendedPractice}
+              />
               <div className="free-replay-actions">
-                <button type="button" className="primary-action" onClick={() => start(activeConfig, activePlannedTime)}>同じ条件でもう一度</button>
                 <button type="button" className="secondary-action" onClick={changeConditions}>条件を変える</button>
                 <button type="button" className="text-action" onClick={onBack}>コース一覧へ</button>
               </div>

@@ -74,7 +74,7 @@ export function DiagnosticQuestion({
       </fieldset>
 
       <button type="button" className="primary-action" onClick={submit} disabled={!optionId || !confidence}>
-        {mode === "predict" ? "予想を記録して海面へ" : "回答を確かめる"}
+        {mode === "predict" ? "予想を記録してシミュレーションを始める" : "回答を確認する"}
         <span aria-hidden="true">→</span>
       </button>
     </section>

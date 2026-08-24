@@ -53,7 +53,7 @@ function ResultSummary({
   const share = async () => {
     const shareData = {
       title: "SHIFT｜420 TACTICS",
-      text: `420戦術トレーニング「振れをクロスに変える」判断スコア ${overallScore}/100`,
+      text: `420戦術トレーニング「右振れ後のタック」判断スコア ${overallScore}/100`,
       url: window.location.href,
     };
     try {
@@ -115,7 +115,7 @@ function ResultSummary({
 
       {prediction.evaluation.showScaffold ? (
         <div className="prediction-review">
-          <strong>予想から見えたこと</strong>
+          <strong>事前予想の確認</strong>
           <p>{prediction.evaluation.feedback}</p>
         </div>
       ) : null}
@@ -131,7 +131,7 @@ function ResultSummary({
           <button type="button" className="primary-action" onClick={onRetry}>同じ海面でもう一度</button>
         ) : (
           <button type="button" className="primary-action" onClick={() => onOpenLesson(recommendedId)}>
-            おすすめへ進む <span aria-hidden="true">→</span>
+            おすすめのレッスンを始める <span aria-hidden="true">→</span>
           </button>
         )}
         <button type="button" className="secondary-action" onClick={share}>{shareLabel}</button>
@@ -219,7 +219,7 @@ export function SimulationLesson({
       <section className="lesson-heading lesson-heading--compact">
         <div>
           <div className="section-kicker">{lesson.eyebrow}</div>
-          <h1>右振れを、<br />クロスに変える。</h1>
+          <h1>右振れ後の<br />タックを練習する。</h1>
         </div>
         <p>{lesson.summary}</p>
       </section>
@@ -271,7 +271,7 @@ export function SimulationLesson({
             <section className="watch-list" aria-labelledby="watch-heading">
               <div className="section-kicker">LOOK / 見るポイント</div>
               <h2 id="watch-heading">
-                {prediction?.evaluation.showScaffold ? "基準線を使って見る。" : "風だけでなく、相手も見る。"}
+                {prediction?.evaluation.showScaffold ? "ラダーラングを使って確認する" : "風向と相手艇を確認する"}
               </h2>
               {prediction?.evaluation.showScaffold ? (
                 <div className="live-scaffold" aria-live="polite">

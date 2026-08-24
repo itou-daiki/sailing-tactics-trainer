@@ -86,8 +86,8 @@ export function getRaceLearningFeedback(replay: RaceReplay): RaceLearningFeedbac
 
   return {
     focus: "integrate",
-    label: "2つの情報をつなぐ",
-    headline: "基本はそろった。次は2つの情報を同時に使う",
+    label: "2つの情報を同時に確認",
+    headline: "基本項目は確認できました。次は2つの情報を同時に使います",
     evidence: `クリーンエア${cleanAirPercent}%、リフト側${liftedPercent}%で、重大な見落としは続きませんでした。`,
     nextAction: "次の1走は「風＋相手」または「潮＋ライン」の2つを1回のコールにまとめます。",
   };

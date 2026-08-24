@@ -152,8 +152,8 @@ function getDecisionFeedback(tackTime: number | null): DecisionFeedback {
   if (tackTime === null) {
     return {
       rating: "タックしなかった",
-      summary: "右振れで生まれたチャンスを、相手とのクロスに変えられませんでした。",
-      nextTry: "ヘダーを確認したら、風が戻る前にクロスできる時刻を探しましょう。",
+      summary: "右振れで得た有利を、相手の前を通る位置関係にできませんでした。",
+      nextTry: "ヘダーを確認したら、風が戻る前に相手の前を通れる時刻でタックしましょう。",
       score: 24,
     };
   }
@@ -180,7 +180,7 @@ function getDecisionFeedback(tackTime: number | null): DecisionFeedback {
   return {
     rating: "少し遅い",
     summary: "右振れは読めましたが、相手をクロスできる時間を逃しました。",
-    nextTry: "相手をクロスできるうちにタックし、暫定ゲインを取り込みましょう。",
+    nextTry: "相手の前をクロスできるうちにタックし、暫定ゲインを確定させましょう。",
     score: Math.max(30, 82 - Math.abs(difference) * 7),
   };
 }

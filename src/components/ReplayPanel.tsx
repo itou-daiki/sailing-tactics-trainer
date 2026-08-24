@@ -28,7 +28,7 @@ export function ReplayPanel({
   return (
     <section className="replay-panel" aria-labelledby="replay-heading">
       <div className="section-kicker">REPLAY / 振り返る</div>
-      <h2 id="replay-heading">差が動いた瞬間を見よう</h2>
+      <h2 id="replay-heading">自艇と相手艇の差を確認する</h2>
 
       <div className="timeline-readout">
         <strong>{time}秒</strong>

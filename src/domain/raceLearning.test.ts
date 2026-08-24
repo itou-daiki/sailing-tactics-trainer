@@ -62,7 +62,7 @@ describe("RACE LABの形成的フィードバック", () => {
 
     expect(getRaceLearningFeedback(replay)).toMatchObject({
       focus: "integrate",
-      headline: "基本はそろった。次は2つの情報を同時に使う",
+      headline: "基本項目は確認できました。次は2つの情報を同時に使います",
     });
   });
 });

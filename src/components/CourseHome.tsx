@@ -25,10 +25,10 @@ export function CourseHome({
     <div className="course-home">
       <section className="course-intro" aria-labelledby="course-title">
         <div className="section-kicker">420 SHIFT TRAINING / 自主練習</div>
-        <h1 id="course-title">振れを見て、<br />返す場所を決める。</h1>
+        <h1 id="course-title">タック／ジャイブの<br />タイミングを練習する。</h1>
         <p>
-          タック／ジャイブは、1回の正解当てではありません。右、左、また右へ動く風を読み、
-          待つか返すかをマークまで何度も判断します。
+          風が右、左へ繰り返し振れる海面で、いつ待ち、いつタック／ジャイブするかを
+          マークまで何度も練習します。
         </p>
       </section>
 
@@ -38,7 +38,7 @@ export function CourseHome({
         </div>
         <div className="free-launch__copy">
           <div className="section-kicker">SHIFT LAB / TACK &amp; GYBE POINT</div>
-          <h2 id="free-launch-title">どこで返すか、全部見る</h2>
+          <h2 id="free-launch-title">タック／ジャイブのタイミングを練習する</h2>
           <p>何度も振れ、振れ戻る風を再現。各タック／ジャイブを前後4秒へ動かし、ゲイン、ロス、マーク到達を個別に比べます。</p>
         </div>
         <div className="free-launch__meta">
@@ -46,7 +46,7 @@ export function CourseHome({
           <span>全操作を分析</span>
         </div>
         <button type="button" onClick={onOpenFreeSimulation}>
-          判断点を練習する <span aria-hidden="true">→</span>
+          SHIFT LABを始める <span aria-hidden="true">→</span>
         </button>
       </section>
 
@@ -57,8 +57,8 @@ export function CourseHome({
         </div>
         <div className="race-launch__copy">
           <div className="section-kicker">RACE LAB / 応用</div>
-          <h2 id="race-launch-title">艇団の中で使う</h2>
-          <p>SHIFT LABで判断点を学んだら、初級4艇／中級8艇のスタートから第1上マークまで実戦へつなげます。</p>
+          <h2 id="race-launch-title">スタートから第1上マークまで練習する</h2>
+          <p>SHIFT LABでタック／ジャイブのタイミングを練習したら、初級4艇／中級8艇でスタートから第1上マークまで走ります。</p>
         </div>
         <div className="race-launch__meta">
           <span>RRS 26</span>
@@ -66,7 +66,7 @@ export function CourseHome({
           <span>START → MARK 1</span>
         </div>
         <button type="button" onClick={onOpenRaceSimulation}>
-          艇団で試す <span aria-hidden="true">→</span>
+          RACE LABを始める <span aria-hidden="true">→</span>
         </button>
       </section>
 
@@ -100,14 +100,14 @@ export function CourseHome({
           <p>{recommended.objective}</p>
         </div>
         <button type="button" onClick={() => onOpenLesson(recommended.id)}>
-          始める <span aria-hidden="true">→</span>
+          このレッスンを始める <span aria-hidden="true">→</span>
         </button>
       </section>
 
       <section className="lesson-index" aria-labelledby="lesson-index-title">
         <div className="lesson-index__heading">
           <div className="section-kicker">COURSE / 段階的に学ぶ</div>
-          <h2 id="lesson-index-title">5つの判断をつなげる</h2>
+          <h2 id="lesson-index-title">5つの基礎レッスン</h2>
         </div>
         <ol>
           {LESSONS.map((lesson) => {
@@ -135,7 +135,7 @@ export function CourseHome({
       </section>
 
       <aside className="course-principle">
-        <strong>このコースで測るもの</strong>
+        <strong>評価する内容</strong>
         <p>最終順位だけではなく、観察できた情報から再現可能な判断をしたかを評価します。</p>
       </aside>
     </div>

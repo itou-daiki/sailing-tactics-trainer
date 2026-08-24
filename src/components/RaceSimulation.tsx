@@ -64,7 +64,7 @@ const REFLECTION_OPTIONS: Array<{ value: RaceLearningFocus; label: string }> = [
   { value: "lane", label: "乱れた風から抜ける" },
   { value: "shift", label: "振れに合うタック" },
   { value: "rights", label: "権利艇への早い対応" },
-  { value: "integrate", label: "2つの情報をつなぐ" },
+  { value: "integrate", label: "2つの情報を同時に確認" },
 ];
 
 const CONDITIONS: Array<{
@@ -125,7 +125,7 @@ const getLiveCall = (
     return `ラインまで${lineDelta.toFixed(1)}艇身。時間と距離をセットでコール。`;
   }
   if (markDistance <= 3) return "3艇身ゾーン。内外とオーバーラップを声に出す。";
-  if (!cleanAir) return "乱れた風。2艇身先のクリーンなレーンを探す。";
+  if (!cleanAir) return "乱れた風です。2艇身先のクリーンなレーンへ移動します。";
   return "風向、次のクロス、マークへの長いタックを順に確認。";
 };
 
@@ -161,10 +161,10 @@ function RaceSetup({
   return (
     <section className="race-setup" aria-labelledby="race-setup-title">
       <div className="section-kicker">RACE LAB / START → MARK 1</div>
-      <h1 id="race-setup-title">艇団の中で、<br />次の一手を決める。</h1>
+      <h1 id="race-setup-title">スタートから<br />第1上マークまで練習する。</h1>
       <p className="race-setup__lead">
         {level === "guided"
-          ? "初めは、ライン、走れる風、マークでの相手関係の3つだけを順に見ます。残り60秒から第1上マークまで、判断点で止まりながら走ります。"
+          ? "初めは、ライン、走れる風、マークでの相手関係の3つだけを順に見ます。残り60秒から第1上マークまで、確認する時刻に自動停止しながら走ります。"
           : "実戦で見る主要な情報を一つの海面に置き、残り60秒から第1上マークまでを走ります。ライン、潮、ブロー、権利、クリーンエアを同時に見ます。"}
       </p>
 
@@ -276,7 +276,7 @@ function RaceSetup({
       </aside>
 
       <button type="button" className="race-start-action" onClick={onStart}>
-        {level === "guided" ? "コーチ付きで走る" : "残り60秒から走る"} <span aria-hidden="true">→</span>
+        {level === "guided" ? "コーチ付き練習を始める" : "レース練習を始める"} <span aria-hidden="true">→</span>
       </button>
       <p className="race-model-note">
         信号時刻・権利表示・3艇身ゾーンはRRS 2025–2028を参照。艇速、ブロー、潮、相手艇AIは判断練習用の簡略モデルで、審問の代わりにはなりません。
@@ -479,14 +479,14 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
                 <button type="button" onClick={() => {
                   if (paused) setActiveCoachStop(null);
                   setPaused((current) => !current);
-                }}>{paused ? "声に出したので再開" : "一時停止"}</button>
+                }}>{paused ? "確認して再開" : "一時停止"}</button>
                 <div role="group" aria-label="進行速度">
                   {[2, 4, 8].map((value) => (
                     <button key={value} type="button" aria-pressed={speed === value} className={speed === value ? "is-active" : ""} onClick={() => setSpeed(value)}>{value}×</button>
                   ))}
                 </div>
               </div>
-              <button type="button" className="text-action" onClick={() => setPhase("setup")}>中止して作戦を変える</button>
+              <button type="button" className="text-action" onClick={() => setPhase("setup")}>中止して条件を変える</button>
             </>
           ) : (
             <>
@@ -515,8 +515,8 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
 
       {phase === "replay" ? (
         <section className="race-debrief" aria-labelledby="race-debrief-title">
-          <div className="section-kicker">TRANSFER CHECK / 水上へ持ち帰る</div>
-          <h2 id="race-debrief-title">何が順位を動かした？</h2>
+          <div className="section-kicker">RACE REVIEW / レースを振り返る</div>
+          <h2 id="race-debrief-title">順位が変わった理由を確認する</h2>
           <div className="race-score-line">
             <div className={replay.start.isOcs ? "is-alert" : ""}>
               <span>START</span>
@@ -554,7 +554,7 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
             </div>
             {reflection ? (
               <aside className="race-next-focus" aria-live="polite">
-                <span>{reflection === learningFeedback.focus ? "見立てが一致" : "リプレイで見落としを発見"}</span>
+                <span>{reflection === learningFeedback.focus ? "自己評価と記録が一致" : "記録と異なる項目を確認"}</span>
                 <strong>{learningFeedback.headline}</strong>
                 <p>{learningFeedback.evidence}</p>
                 <div><b>次の1走</b>{learningFeedback.nextAction}</div>
@@ -567,7 +567,7 @@ export function RaceSimulation({ onBack }: { onBack: () => void }) {
             <div><span>権利リスク</span><strong>{replay.ruleRiskCount}回</strong><small>ポート対スターボード</small></div>
           </div>
           <div className="race-water-transfer">
-            <strong>次の水上練習で、3つだけ声に出す</strong>
+            <strong>次の水上練習で確認する3項目</strong>
             <ol>
               <li><span>残り30秒</span>「ラインまで何艇身、潮はどちら」</li>
               <li><span>スタート後</span>「前の艇の風か、クリーンか」</li>

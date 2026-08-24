@@ -55,7 +55,7 @@ export const LESSONS: LessonDefinition[] = [
     kind: "concept",
     diagram: "ladder",
     eyebrow: "RELATIVE GAIN / 相対ゲイン",
-    title: "艇が動かなくても、\n順位は動く。",
+    title: "風の振れで、\n2艇の前後関係が変わる。",
     shortTitle: "風が振れたら、どちらが前？",
     summary: "風向に直角な線で、2艇の本当の前後関係を読みます。",
     objective: "右振れ・左振れと、左右に離れた艇のゲインを結びつける",
@@ -95,9 +95,9 @@ export const LESSONS: LessonDefinition[] = [
     kind: "simulation",
     diagram: "cross",
     eyebrow: "OSCILLATING WIND / 振れ戻る風",
-    title: "右振れを、\nクロスに変える。",
-    shortTitle: "振れをクロスに変える",
-    summary: "一時的なゲインを、相手より前を通る位置関係へ変えます。",
+    title: "右振れ後の\nタックを練習する。",
+    shortTitle: "右振れ後のタック",
+    summary: "一時的なゲインがあるうちにタックし、相手の前を通ります。",
     objective: "ヘダーを確認し、振れが戻る前にタックしてクロスを狙う",
     duration: "約3分",
     vocabulary: "クロス・暫定ゲイン",
@@ -109,7 +109,7 @@ export const LESSONS: LessonDefinition[] = [
           id: "user-gains",
           label: "右側の自艇がゲインする",
           isCorrect: true,
-          feedback: "右側の自艇が暫定ゲインを得ます。次は、いつクロスへ変えるかです。",
+          feedback: "右側の自艇が暫定ゲインを得ます。次は、相手の前を通れるタック時刻を考えます。",
         },
         {
           id: "opponent-gains",
@@ -127,7 +127,7 @@ export const LESSONS: LessonDefinition[] = [
         },
       ],
     },
-    keyIdea: "暫定ゲインは、相手をクロスできるうちに取り込む。",
+    keyIdea: "暫定ゲインがあるうちに相手をクロスし、前後差を確定する。",
   },
   {
     id: "shift-return",
@@ -135,10 +135,10 @@ export const LESSONS: LessonDefinition[] = [
     kind: "concept",
     diagram: "return",
     eyebrow: "WIND RETURN / 振れ戻り",
-    title: "得した3艇身は、\nまだ確定ではない。",
+    title: "風が戻ると、\n暫定ゲインは小さくなる。",
     shortTitle: "風が戻るとゲインはどうなる？",
     summary: "横に離れたまま風が戻ると、暫定ゲインがどう変わるかを読みます。",
-    objective: "現在のゲインと、クロスして取り込んだゲインを区別する",
+    objective: "現在の暫定ゲインと、クロス後に確定した前後差を区別する",
     duration: "約2分",
     vocabulary: "振れ戻り・レバレッジ",
     question: {
@@ -167,7 +167,7 @@ export const LESSONS: LessonDefinition[] = [
         },
       ],
     },
-    keyIdea: "風による差は暫定。クロスで取り込めた差と分けて考える。",
+    keyIdea: "風による差は暫定。クロス後に確定した前後差と分けて考える。",
   },
   {
     id: "cover-or-split",
@@ -175,7 +175,7 @@ export const LESSONS: LessonDefinition[] = [
     kind: "concept",
     diagram: "cover",
     eyebrow: "FLEET POSITION / 他艇との位置",
-    title: "リード艇は守る。\n追走艇は揺さぶる。",
+    title: "先行時と追走時で\n戦い方を変える。",
     shortTitle: "カバーする？ 分かれる？",
     summary: "順位によって、取るべきレバレッジとリスクが変わることを学びます。",
     objective: "リード時はレバレッジを減らし、追走時は逆転機会を作る",
@@ -266,7 +266,7 @@ export function evaluateAnswer(
     return {
       correct: true,
       score,
-      headline: confidence === "sure" ? "考え方まで合っています" : "正解。理由を固めよう",
+      headline: confidence === "sure" ? "正解です。理由も説明できています" : "正解です。理由を確認してください",
       feedback: option.feedback,
       nextInstruction:
         confidence === "sure"
@@ -279,7 +279,7 @@ export function evaluateAnswer(
   return {
     correct: false,
     score: confidence === "sure" ? 28 : confidence === "thinking" ? 40 : 52,
-    headline: confidence === "sure" ? "思い込みを修正するチャンス" : "基準線から考え直そう",
+    headline: confidence === "sure" ? "思い込みを修正しましょう" : "基準線を使って考え直してください",
     feedback: option.feedback,
     nextInstruction: `「${lesson.keyIdea}」を図で確認し、同じ問いにもう一度答えてみましょう。`,
     diagnosis: option.diagnosis,

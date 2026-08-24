@@ -85,6 +85,45 @@ describe("フリーシミュレーション", () => {
     expect(reviews[0].trials.map((trial) => trial.offset)).toEqual([-4, 0, 4]);
   });
 
+  it("操作時に宣言した優先理由を、同時刻の風・相手・マークの記録と照合する", () => {
+    const [review] = analyzeManeuverPoints(
+      config({ windPattern: "oscillating", opponentMode: "hold", leverageBoatLengths: 20 }),
+      [8],
+      [{ time: 8, reason: "wind" }],
+    );
+
+    expect(review.declaredReason).toBe("wind");
+    expect(review.strongestCue).toBe("wind");
+    expect(review.reasonVerdict).toBe("supported");
+    expect(review.tacticalCues.wind.supported).toBe(true);
+    expect(review.tacticalCues.opponent.supported).toBe(false);
+    expect(review.tacticalCues.mark.supported).toBe(false);
+  });
+
+  it("宣言した理由が海面記録に弱いときは、より強い観察対象を返す", () => {
+    const [review] = analyzeManeuverPoints(
+      config({ windPattern: "oscillating", opponentMode: "hold", leverageBoatLengths: 20 }),
+      [8],
+      [{ time: 8, reason: "mark" }],
+    );
+
+    expect(review.reasonVerdict).toBe("reconsider");
+    expect(review.strongestCue).toBe("wind");
+    expect(review.tacticalCues.mark.observation).toContain("レイライン前");
+  });
+
+  it("レイラインで返した操作は、マークを優先した判断として支持する", () => {
+    const [review] = analyzeManeuverPoints(
+      config({ shiftAngle: 0, windPattern: "hold", opponentMode: "hold" }),
+      [23],
+      [{ time: 23, reason: "mark" }],
+    );
+
+    expect(review.tacticalCues.mark.supported).toBe(true);
+    expect(review.strongestCue).toBe("mark");
+    expect(review.reasonVerdict).toBe("supported");
+  });
+
   it("下りは上りと有利なサイドが逆になるため、ジャイブ前後を逆向きに評価する", () => {
     const [review] = analyzeManeuverPoints(
       config({ leg: "downwind", windPattern: "oscillating", opponentMode: "hold" }),

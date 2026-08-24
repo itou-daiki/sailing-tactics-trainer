@@ -97,6 +97,18 @@ export interface TimingAnalysis {
 
 export type WindTrend = "left" | "steady" | "right";
 export type SailingShiftState = "favored" | "neutral" | "unfavored";
+export type ManeuverReason = "wind" | "opponent" | "mark";
+export type ManeuverReasonVerdict = "supported" | "reconsider" | "unclear" | "unrecorded";
+
+export interface ManeuverReasonCall {
+  time: number;
+  reason: ManeuverReason;
+}
+
+export interface TacticalCueEvidence {
+  supported: boolean;
+  observation: string;
+}
 
 export interface ManeuverPointReview {
   maneuverNumber: number;
@@ -108,6 +120,10 @@ export interface ManeuverPointReview {
   stateBefore: SailingShiftState;
   stateAfter: SailingShiftState;
   secondsSincePrevious: number | null;
+  declaredReason: ManeuverReason | null;
+  strongestCue: ManeuverReason | null;
+  reasonVerdict: ManeuverReasonVerdict;
+  tacticalCues: Record<ManeuverReason, TacticalCueEvidence>;
   bestOffset: TimingOffset;
   trials: TimingTrial[];
 }
@@ -935,13 +951,77 @@ export function getWindDecisionSnapshot(
 export function analyzeManeuverPoints(
   config: FreeScenarioConfig,
   userManeuverTimes: number[],
+  reasonCalls: ManeuverReasonCall[] = [],
 ): ManeuverPointReview[] {
   const normalizedTimes = normalizeManeuverTimes(userManeuverTimes);
+  const replay = runFreeScenario(config, normalizedTimes);
   return normalizedTimes.map((time, index) => {
     const tackBefore = getTack(time - 1, normalizedTimes);
     const tackAfter = getTack(time, normalizedTimes);
     const beforeSnapshot = getWindDecisionSnapshot(config, time, tackBefore);
     const afterSnapshot = getWindDecisionSnapshot(config, time, tackAfter);
+    const frame = replay.frames[Math.min(time, replay.frames.length - 1)];
+    const mark = config.leg === "upwind" ? UPWIND_MARK : DOWNWIND_MARK;
+    const separationBoatLengths = Math.hypot(
+      frame.user.x - frame.opponent.x,
+      frame.user.y - frame.opponent.y,
+    ) / BOAT_LENGTH_PX;
+    const meetingDecision = replay.opponentDecisions.find((decision) =>
+      Math.abs(decision.time - time) <= 2
+    );
+    const markSupported = hasReachedMarkLayline(
+      frame.user,
+      tackBefore,
+      frame.windAngle,
+      config.leg,
+      mark,
+    );
+    const opponentSupported = Boolean(frame.blanket)
+      || Boolean(meetingDecision)
+      || separationBoatLengths <= 4;
+    const windSupported = beforeSnapshot.state === "unfavored";
+    const tacticalCues: Record<ManeuverReason, TacticalCueEvidence> = {
+      wind: {
+        supported: windSupported,
+        observation: beforeSnapshot.state === "unfavored"
+          ? `${config.leg === "upwind" ? "ヘダー側" : "風下へ向きにくい側"}から、返すと有利側へ移る`
+          : beforeSnapshot.state === "favored"
+            ? `${config.leg === "upwind" ? "リフト側" : "風下へ向ける側"}を走っていた`
+            : "平均風向付近で、風だけでは返す根拠が弱い",
+      },
+      opponent: {
+        supported: opponentSupported,
+        observation: frame.blanket
+          ? `${frame.blanket.affected === "user" ? "自艇" : "相手"}がブランケットの影にいる`
+          : meetingDecision
+            ? `約${meetingDecision.secondsToMeeting}秒先のミート判断がある`
+            : `相手まで${separationBoatLengths.toFixed(1)}艇身${opponentSupported ? "で、位置関係を優先できる" : "。急いで返す材料は弱い"}`,
+      },
+      mark: {
+        supported: markSupported,
+        observation: markSupported
+          ? "反対タックでマークを狙えるレイラインに来た"
+          : "まだレイライン前で、マークだけを理由に返す段階ではない",
+      },
+    };
+    // RYA's three-hats model asks sailors to identify which priority is driving
+    // the decision. This trainer adapts it to wind, opponent and mark/layline.
+    // Source: https://www.rya.org.uk/racing/tactics-for-winning-on-the-water/
+    const strongestCue: ManeuverReason | null = markSupported
+      ? "mark"
+      : opponentSupported
+        ? "opponent"
+        : windSupported
+          ? "wind"
+          : null;
+    const declaredReason = reasonCalls.find((call) => call.time === time)?.reason ?? null;
+    const reasonVerdict: ManeuverReasonVerdict = declaredReason === null
+      ? "unrecorded"
+      : tacticalCues[declaredReason].supported
+        ? "supported"
+        : strongestCue
+          ? "reconsider"
+          : "unclear";
     const trials = ([-4, 0, 4] as TimingOffset[]).map((offset): TimingTrial => {
       const previousTime = normalizedTimes[index - 1];
       const nextTime = normalizedTimes[index + 1];
@@ -975,6 +1055,10 @@ export function analyzeManeuverPoints(
       stateBefore: beforeSnapshot.state,
       stateAfter: afterSnapshot.state,
       secondsSincePrevious: index === 0 ? null : time - normalizedTimes[index - 1],
+      declaredReason,
+      strongestCue,
+      reasonVerdict,
+      tacticalCues,
       bestOffset: bestTrial.offset,
       trials,
     };

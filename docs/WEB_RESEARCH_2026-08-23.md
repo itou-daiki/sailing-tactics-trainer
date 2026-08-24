@@ -21,6 +21,8 @@
 | [World Sailing Technical Courses for Coaches](https://www.sailing.org/inside-world-sailing/activities-services/training-development/instructor-coach-programmes/technical-courses-for-coaches/) | Level 2は、スピード・戦術・戦略について構造化したレーストレーニングを計画、実施するコーチを対象にする | 自由操作だけでなく、目的を絞ったドリル入口を用意する |
 | [World Sailing Level 1 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel1TechnicalCourse324.05.13-%5B15060%5D.pdf) | 練習を `Plan – Do – Review` として組み、brief、実施、debriefをつなぐ | 操作前の予定時刻、実行時刻、リプレイを一続きにする |
 | [World Sailing Level 2 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel2TechnicalCourseSyllabus-%5B18133%5D.pdf) | 目的、学習成果、陸上ドリル、対話型理論、recap/debrief、映像資源を組み合わせる | 各プリセットに「何を見る練習か」を明記し、結果だけで終わらせない |
+| [World Sailing Level 3 Coach Syllabus](https://www.sailing.org/tools/documents/ISAFLevel3TechnicalCourseSyllabus-%5B18134%5D.pdf) | レースコーチングを準備・知識・技術・意思決定に分け、戦術と規則を理論、陸上実習、海上実習、brief/debriefで扱う | 画面が判断を代行せず、選手の意思決定を操作時点で記録してデブリーフの材料にする |
+| [RYA: Tactics for winning on the water](https://www.rya.org.uk/racing/tactics-for-winning-on-the-water/) | 複雑な実戦判断を、風の振れ、有利な海面、マークと他艇の位置という「three hats」の優先順位へ絞る。すべてを同時に解こうとせず、その瞬間の最大要因を明確にする | SHIFT LAB向けに「風・相手・マーク」の3候補へ置き換え、各タック／ジャイブで最優先の根拠をコールしてから操作する |
 | [International 420 Class online training resource](https://www.sailing.org/2015/05/05/international-420-class-launches-new-online-training-resource/) | 420向けExercise e-Bookは、選んだ練習を段階化し、目的、必要物、評価、動画・アニメーション、debrief notes、progress benchmarkをまとめている | 420専用ドリルと振り返り問いを製品の中心に置く |
 | [World Sailing: Picture Perfect Start To Key West 2010](https://www.sailing.org/2010/01/19/picture-perfect-start-to-key-west-2010/) | 7〜10ktのオシレーティングな風で、選手報告の振れ幅は5〜50°。複数回のシフトごとにゲイン／ロスの機会があり、シフトを拾った回数が戦術結果に結びついた | 1回だけ振れて静止する標準海面をやめ、右 → 左 → 右の振れをマーク到達まで反復する。最初の操作だけでなく全操作を評価する |
 | [World Sailing: 420 Class Launches Online Training Video](https://www.sailing.org/2011/06/02/420-class-launches-online-training-video/) | 初心者と経験者の両方を対象に、異なる風・海面でマニューバー時に考える点を示し、視聴・実践・レビューの反復を勧める | SHIFT LABを `観察 → 操作 → 全ポイントのレビュー → 再試行` の短い循環にする。総合得点より、各マニューバーの根拠を分解する |
@@ -40,6 +42,7 @@
 | サービス | 公開情報から確認した強み | SHIFTが取る位置 |
 | --- | --- | --- |
 | [SailPro Sim](https://www.sailpro.app/racing-simulator) | スタート有利、レイライン、風の振れ、フリート戦術まで扱う本格シミュレーター。PC、ノートPC、TV、大画面を推奨 | スマホで短く反復できる420専用の学習導線で差別化 |
+| [SailMOB](https://sailmob.co/) | ブラウザでシナリオを選び、権利・スタート・艇団への判断を行い、終了後にコーチ説明を得る | 終了後の正解説明だけでなく、操作した瞬間の判断根拠と海面記録のずれを残す |
 | [Week to Regatta](https://regatta.icoffio.com/?lang=en) | インストール不要、多言語、短いシナリオ、操作後の説明、5分単位の入門構成 | 基礎一般ではなく、振れ戻り・レバレッジ・対艇ゲインを深く扱う |
 | [Sail Tactician](https://apps.apple.com/us/app/sail-tactician/id6741540409) | ガイド付きドリル、カスタムワークアウト、リプレイスクラバー、タック／ジャイブ評価、複数艇比較 | GPSや購読なしで、海に出る前の仮説練習を提供する |
 | [RaceQs](https://raceqs.com/race-analytics/) | GPSの3Dフリートリプレイ、艇同士の比較、タック時間・角度・ロス、共有とdebrief | 同じ海面URLと仮想航跡比較を、チーム導入の基本機能にする |
@@ -58,6 +61,9 @@
 | [Retrieval Practice: Feedback](https://www.retrievalpractice.org/strategies/2018/5/25/feedback) | 正誤だけより説明を含むフィードバックが転移を助け、低い緊張で行うことが推奨される | 点数を付けず、操作なしとの差と理由を文章で説明する |
 | [Retrieval Practice summary](https://www.retrievalpractice.org/summary) | 低リスクの想起、説明的フィードバック、メタ認知を組み合わせる | 走る前の予定を外化し、終わった後にその変更理由を問う |
 | [Prediction before feedback study](https://pubmed.ncbi.nlm.nih.gov/34634998/) | 内容を見る前に予測を試みた条件で、読むだけより保持が向上した研究 | リプレイ前ではなく、スタート前に最初の操作時刻を決める |
+| [Carvalho et al.: Predicting and Explaining Improves Transfer](https://escholarship.org/uc/item/63k2d5fg) | 仮説と説明を先に作り、結果を観察して再説明する学習は、テキストと練習問題より新しい状況への一般化で優れた | 操作前に根拠を選び、リプレイで同時刻の記録と比較する `CALL → DO → CHECK` を加える |
+| [Bisra et al.: Inducing Self-Explanation—Meta-Analysis](https://doi.org/10.1007/s10648-018-9434-x) | 64報・69効果量を統合し、自己説明プロンプトに中程度の学習効果を報告した。ただし領域を越えた420実戦への効果は直接検証していない | 自由記述を強制せず、初学者が扱える「風・相手・マーク」の限定プロンプトから始める |
+| [Tannenbaum & Cerasoli: Do Team and Individual Debriefs Enhance Performance?](https://doi.org/10.1177/0018720812448394) | after-action reviewは、経験を振り返り、議論し、次の目標を決める方法として複数領域の研究を統合している | リプレイを数値一覧で終えず、自分のコール、観察記録、次走の注目点を一続きにする |
 | [Self-explanation and worked examples review](https://pmc.ncbi.nlm.nih.gov/articles/PMC8379662/) | 自己説明は概念の統合や転移を支えうるが、複雑すぎる例には適切な促しが必要 | 「何を見て予定を変えたか」を風・相手・マークの3候補に絞る |
 | [Feedback and motor-skill learning in physical education](https://pubmed.ncbi.nlm.nih.gov/34200657/) | 23研究のレビューで、フィードバックはフィードバックなしより生徒の運動技能学習に有効という強い証拠が示された | 結果だけでなく、ミート予測・必要時間・安全余裕という過程フィードバックを直後のリプレイに出す |
 | [CAST UDL Guidelines 3.0](https://udlguidelines.cast.org/) | 学習者の主体性を目標に、既有知識との接続、重要情報の強調、段階的支援、目標設定、進捗のモニタリング、転移を支える | 初級は見る情報を3つに絞って判断点で止め、中級では支援を外して複数条件を自分で組む |
@@ -108,6 +114,7 @@
 17. ライブ中に `WIND MOVE → NOW → CALL` を表示し、風の変化方向、現在のタックの有利不利、維持／操作の根拠を言葉で結ぶ。
 18. 実行した全タック／ジャイブをPOINT LOGに残し、各1点だけを4秒早く・今回・4秒遅くした試走で比較する。
 19. 見かけの風に沿うブランケットを自艇／相手の双方へ作用させ、後流、瞬間減速率、影にいた秒数、艇身換算ロスをリプレイで説明する。
+20. 各タック／ジャイブの直前に時計を止め、「風・相手・マーク」の最優先理由をコールしてから同じ秒で操作する。POINT LOGでは宣言と3つの観察記録を照合し、唯一の正解ではなく根拠の強弱を返す。
 
 ## 独自ポジション
 
@@ -131,6 +138,7 @@ SHIFTは、GPS解析製品や大画面向け総合シミュレーターの縮小
 - 自己評価とリプレイの見立てが繰り返し一致するようになるか
 - 1回の振れ戻りで理解した学習者が、反復する振れで「毎回返さず、今のタックの有利不利を言う」課題へ転移できるか
 - POINT LOGの2点以上について、風向だけでなく「風が動く向き」と「操作ロス」を使って理由を説明できるか
+- 操作時の優先理由とリプレイ記録の一致率が、反復後と1〜2週間後の新しい海面で上がるか
 
 ## 調査上の制約
 

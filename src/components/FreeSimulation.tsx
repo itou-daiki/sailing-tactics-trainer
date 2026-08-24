@@ -17,6 +17,8 @@ import {
   type FreeScenarioConfig,
   type FreeScenarioReplay,
   type ManeuverPointReview,
+  type ManeuverReason,
+  type ManeuverReasonCall,
   type OpponentDecision,
   type OpponentMode,
   type WinningRouteAnalysis,
@@ -66,6 +68,19 @@ const LEG_OPTIONS: Array<{ value: CourseLeg; label: string; action: string }> = 
   { value: "upwind", label: "上り", action: "タック" },
   { value: "downwind", label: "下り", action: "ジャイブ" },
 ];
+
+const MANEUVER_REASON_OPTIONS: Array<{
+  value: ManeuverReason;
+  label: string;
+  note: string;
+}> = [
+  { value: "wind", label: "風の振れ", note: "ヘダー／振れ戻り" },
+  { value: "opponent", label: "相手", note: "ミート／カバー／風の影" },
+  { value: "mark", label: "マーク", note: "レイライン／進入角" },
+];
+
+const getReasonLabel = (reason: ManeuverReason | null) =>
+  MANEUVER_REASON_OPTIONS.find((option) => option.value === reason)?.label ?? "記録なし";
 
 const FREE_DRILL_PRESETS: FreeDrillPreset[] = [
   {
@@ -724,6 +739,15 @@ const getManeuverPointCall = (review: ManeuverPointReview, leg: CourseLeg) => {
   return leg === "upwind" ? "リフト側を手放した" : "風下へ向ける側を手放した";
 };
 
+const getReasonVerdictText = (review: ManeuverPointReview) => {
+  if (review.reasonVerdict === "supported") return "宣言した根拠を、同時刻の記録でも確認。";
+  if (review.reasonVerdict === "reconsider") {
+    return `記録では「${getReasonLabel(review.strongestCue)}」の材料が強い。`;
+  }
+  if (review.reasonVerdict === "unclear") return "単独の決め手は弱い。複数の材料を比べる。";
+  return "次走は、操作前に優先するものを1つコール。";
+};
+
 const getTrialPositionLabel = (
   reviewTime: number,
   trialTime: number,
@@ -752,7 +776,7 @@ function ManeuverPointLab({
     <section className="free-maneuver-lab" aria-labelledby="free-maneuver-lab-heading">
       <div className="section-kicker">POINT LOG / 全操作を点検</div>
       <h3 id="free-maneuver-lab-heading">すべての{maneuverLabel}ポイントを見る。</h3>
-      <p>各操作だけを前後4秒へ動かした仮想航跡と比べます。BESTはこの3試走内の結果で、唯一の正解ではありません。</p>
+      <p>操作時にコールした「風・相手・マーク」を同時刻の記録と照合し、さらに各操作だけを前後4秒へ動かします。BESTはこの3試走内の結果で、唯一の正解ではありません。</p>
       <ol>
         {reviews.map((review) => {
           const trendLabel = review.windTrend === "right" ? "右へ変化中" : review.windTrend === "left" ? "左へ変化中" : "折り返し付近";
@@ -771,6 +795,25 @@ function ManeuverPointLab({
                 <div><dt>前 → 後</dt><dd>{review.tackBefore === "port" ? "ポート" : "スターボード"} → {review.tackAfter === "port" ? "ポート" : "スターボード"}</dd></div>
                 <div><dt>前回から</dt><dd>{review.secondsSincePrevious === null ? "最初" : `${review.secondsSincePrevious}秒`}</dd></div>
               </dl>
+              <div className={`free-maneuver-reason is-${review.reasonVerdict}`}>
+                <div className="free-maneuver-reason__heading">
+                  <span>YOUR CALL / 自分の根拠</span>
+                  <strong>{getReasonLabel(review.declaredReason)}</strong>
+                  <small>{getReasonVerdictText(review)}</small>
+                </div>
+                <ul aria-label={`${review.maneuverNumber}回目の${maneuverLabel}で確認した3つの材料`}>
+                  {MANEUVER_REASON_OPTIONS.map((option) => {
+                    const cue = review.tacticalCues[option.value];
+                    return (
+                      <li key={option.value} className={cue.supported ? "is-supported" : ""}>
+                        <span>{cue.supported ? "根拠あり" : "要確認"}</span>
+                        <strong>{option.label}</strong>
+                        <small>{cue.observation}</small>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
               <div className="free-maneuver-point__trials" aria-label={`${review.maneuverNumber}回目の${maneuverLabel}を前後4秒で比較`}>
                 {review.trials.map((trial) => (
                   <span key={trial.offset} className={`${trial.offset === 0 ? "is-current " : ""}${trial.offset === review.bestOffset ? "is-best" : ""}`}>
@@ -901,10 +944,8 @@ function ShiftDecisionBar({
       ? config.leg === "upwind" ? "リフト側" : "風下へ向ける側"
       : config.leg === "upwind" ? "ヘダー側" : "横へ逃げる側";
   const call = snapshot.state === "neutral"
-    ? "次の動きを待つ"
-    : snapshot.state === "favored"
-      ? "細かな振れを追わず維持"
-      : `今、${config.leg === "upwind" ? "タック" : "ジャイブ"}する根拠あり`;
+    ? "どの合図を待つ？"
+    : "返す前に、優先を1つ選ぶ";
   return (
     <section className={`free-decision-bar is-${snapshot.state}`} aria-label="現在のタックまたはジャイブ判断" aria-live="polite">
       <span><small>WIND MOVE</small><strong>{trendLabel}</strong></span>
@@ -912,6 +953,34 @@ function ShiftDecisionBar({
       <span><small>NOW</small><strong>{stateLabel}</strong></span>
       <i aria-hidden="true">→</i>
       <span><small>CALL</small><strong>{call}</strong></span>
+    </section>
+  );
+}
+
+function ManeuverReasonPrompt({
+  time,
+  maneuverLabel,
+  onChoose,
+}: {
+  time: number;
+  maneuverLabel: string;
+  onChoose: (reason: ManeuverReason) => void;
+}) {
+  return (
+    <section className="free-reason-prompt" aria-labelledby="free-reason-prompt-heading" aria-live="polite">
+      <div>
+        <span>WHY NOW? / {time}秒のコール</span>
+        <strong id="free-reason-prompt-heading">何を優先して{maneuverLabel}する？</strong>
+        <small>選ぶまで時計は止まります。唯一の正解ではなく、自分の根拠を残します。</small>
+      </div>
+      <div className="free-reason-prompt__choices">
+        {MANEUVER_REASON_OPTIONS.map((option) => (
+          <button key={option.value} type="button" onClick={() => onChoose(option.value)}>
+            <strong>{option.label}</strong>
+            <small>{option.note}</small>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -1067,6 +1136,9 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const [isReplayPlaying, setIsReplayPlaying] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState(1);
   const [userManeuverTimes, setUserManeuverTimes] = useState<number[]>([]);
+  const [maneuverReasonCalls, setManeuverReasonCalls] = useState<ManeuverReasonCall[]>([]);
+  const [reasonPromptTime, setReasonPromptTime] = useState<number | null>(null);
+  const [resumeAfterReason, setResumeAfterReason] = useState(false);
   const replay = useMemo(
     () => runFreeScenario(activeConfig, userManeuverTimes),
     [activeConfig, userManeuverTimes],
@@ -1074,8 +1146,8 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
   const setupReplay = useMemo(() => runFreeScenario(draftConfig, []), [draftConfig]);
   const baseline = useMemo(() => runFreeScenario(activeConfig, []), [activeConfig]);
   const maneuverReviews = useMemo(
-    () => analyzeManeuverPoints(activeConfig, userManeuverTimes),
-    [activeConfig, userManeuverTimes],
+    () => analyzeManeuverPoints(activeConfig, userManeuverTimes, maneuverReasonCalls),
+    [activeConfig, maneuverReasonCalls, userManeuverTimes],
   );
   const winningRouteAnalysis = useMemo(
     () => phase === "replay" ? analyzeWinningRoute(activeConfig, userManeuverTimes) : null,
@@ -1134,21 +1206,38 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
     setActivePlannedTime(plannedTime);
     setTime(0);
     setUserManeuverTimes([]);
+    setManeuverReasonCalls([]);
+    setReasonPromptTime(null);
     setIsPaused(false);
     setIsReplayPlaying(false);
     setPhase("playing");
   };
 
-  const maneuver = () => {
+  const requestManeuver = () => {
     const lastTime = userManeuverTimes[userManeuverTimes.length - 1] ?? -10;
     if (time < 1 || time - lastTime < 4) return;
-    setUserManeuverTimes((current) => [...current, time]);
+    setReasonPromptTime(time);
+    setResumeAfterReason(!isPaused);
+    setIsPaused(true);
+  };
+
+  const maneuverWithReason = (reason: ManeuverReason) => {
+    if (reasonPromptTime === null) return;
+    // React state arrays are replaced rather than mutated so rapid consecutive
+    // calls retain both the maneuver time and its declared reason.
+    // Source: https://react.dev/learn/updating-arrays-in-state
+    setUserManeuverTimes((current) => [...current, reasonPromptTime]);
+    setManeuverReasonCalls((current) => [...current, { time: reasonPromptTime, reason }]);
+    setReasonPromptTime(null);
+    if (resumeAfterReason) setIsPaused(false);
+    setResumeAfterReason(false);
   };
 
   const changeConditions = () => {
     setDraftConfig(activeConfig);
     setDraftPlannedTime(activePlannedTime);
     setTime(0);
+    setReasonPromptTime(null);
     setIsReplayPlaying(false);
     setPhase("setup");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1236,16 +1325,23 @@ export function FreeSimulation({ onBack }: { onBack: () => void }) {
 
           {phase === "playing" ? (
             <div className="action-dock free-action-dock">
+              {reasonPromptTime !== null ? (
+                <ManeuverReasonPrompt
+                  time={reasonPromptTime}
+                  maneuverLabel={maneuverLabel}
+                  onChoose={maneuverWithReason}
+                />
+              ) : null}
               <div className="play-clock">
                 <strong>{time}</strong><span>秒</span>
-                <p>{isPaused ? `停止中。${currentExplanation}` : currentExplanation}</p>
+                <p>{reasonPromptTime !== null ? "時計を止めました。根拠を選ぶと同じ時刻から再開します。" : isPaused ? `停止中。${currentExplanation}` : currentExplanation}</p>
               </div>
-              <button type="button" className="pause-action" onClick={() => setIsPaused((current) => !current)}>
+              <button type="button" className="pause-action" onClick={() => setIsPaused((current) => !current)} disabled={reasonPromptTime !== null}>
                 {isPaused ? "再開" : "一時停止"}
               </button>
-              <button type="button" className="tack-action" onClick={maneuver} disabled={!canManeuver}>
+              <button type="button" className="tack-action" onClick={requestManeuver} disabled={!canManeuver || reasonPromptTime !== null}>
                 <span>今、{maneuverLabel}</span>
-                <small>{userManeuverTimes.length}回実行</small>
+                <small>根拠をコール → 実行</small>
               </button>
               <button type="button" className="text-action" onClick={changeConditions}>中止して条件を変える</button>
             </div>

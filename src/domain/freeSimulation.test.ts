@@ -17,6 +17,7 @@ import {
   serializeFreeScenarioConfig,
   type FreeScenarioConfig,
 } from "./freeSimulation";
+import { getMarkDistance, MARK_REACH_RADIUS_PX } from "./simulation";
 
 const config = (overrides: Partial<FreeScenarioConfig> = {}): FreeScenarioConfig => ({
   ...DEFAULT_FREE_CONFIG,
@@ -273,6 +274,41 @@ describe("フリーシミュレーション", () => {
       kind: "opponent-tack",
       label: "相手がレイラインでタック",
     }));
+  });
+
+  it("相手はマークへ到達した時点で止まり、残りのリプレイで位置を変えない", () => {
+    const candidatePlans = [
+      ...Array.from({ length: 51 }, (_, time) => [time]),
+      ...Array.from({ length: 41 }, (_, time) => [time, time + 10]),
+    ];
+
+    for (const leg of ["upwind", "downwind"] as const) {
+      const scenario = candidatePlans.map((plan) => {
+        const replay = runFreeScenario(config({
+          leg,
+          shiftAngle: 0,
+          windPattern: "hold",
+          opponentMode: "hold",
+        }), plan);
+        const arrivalIndex = replay.frames.findIndex((frame) =>
+          getMarkDistance(frame.opponent, leg) <= MARK_REACH_RADIUS_PX
+        );
+        return { arrivalIndex, replay };
+      }).find(({ arrivalIndex, replay }) =>
+        arrivalIndex >= 0 && arrivalIndex < replay.frames.length - 1
+      );
+
+      expect(scenario).toBeDefined();
+      const { arrivalIndex, replay } = scenario!;
+      const arrival = replay.frames[arrivalIndex].opponent;
+      for (const frame of replay.frames.slice(arrivalIndex)) {
+        expect(frame.opponent.speed).toBe(0);
+        expect(frame.opponent.x).toBeCloseTo(arrival.x);
+        expect(frame.opponent.y).toBeCloseTo(arrival.y);
+        expect(frame.opponent.tack).toBe(arrival.tack);
+        expect(frame.opponent.heading).toBe(arrival.heading);
+      }
+    }
   });
 
   it("レイライン前のミートで自艇が後ろなら、相手はタックしてレイライン側へ返す", () => {

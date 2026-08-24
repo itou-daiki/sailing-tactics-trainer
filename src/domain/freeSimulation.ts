@@ -573,6 +573,7 @@ export function runFreeScenario(
   let opponentBlanketSeconds = 0;
   let opponentAvoidUntil = -1;
   let lastOpponentAvoidanceTime = -10;
+  let stoppedOpponentState: { tack: Tack; heading: number } | null = null;
   const frames: Frame[] = [];
   let markResult: MarkResult = "timeout";
   const mark = config.leg === "upwind" ? UPWIND_MARK : DOWNWIND_MARK;
@@ -581,11 +582,24 @@ export function runFreeScenario(
   for (let time = 0; time <= FREE_SCENARIO_MAX_DURATION; time += 1) {
     const windAngle = getFreeWindAngle(time, config);
     const userTack = getTack(time, userManeuverTimes);
-    const opponentTackBeforeManeuver = getTack(time, opponentManeuverTimes);
+    if (!stoppedOpponentState
+      && getMarkDistance(opponentPosition, config.leg) <= MARK_REACH_RADIUS_PX) {
+      const previousOpponent = frames.at(-1)?.opponent;
+      const tack = previousOpponent?.tack ?? getTack(time, opponentManeuverTimes);
+      stoppedOpponentState = {
+        tack,
+        heading: previousOpponent?.heading ?? getHeading(tack, windAngle, config.leg),
+      };
+    }
+    const opponentReachedMark = stoppedOpponentState !== null;
+    const opponentTackBeforeManeuver = stoppedOpponentState?.tack
+      ?? getTack(time, opponentManeuverTimes);
     const lastOpponentManeuverTime = opponentManeuverTimes[opponentManeuverTimes.length - 1] ?? -10;
-    const scheduledManeuver = time - lastOpponentManeuverTime >= maneuverRecoverySeconds
+    const scheduledManeuver = !opponentReachedMark
+      && time - lastOpponentManeuverTime >= maneuverRecoverySeconds
       && scheduledOpponentManeuverTimes.includes(time);
-    const laylineManeuver = time - lastOpponentManeuverTime >= 4
+    const laylineManeuver = !opponentReachedMark
+      && time - lastOpponentManeuverTime >= 4
       && hasReachedMarkLayline(
         opponentPosition,
         opponentTackBeforeManeuver,
@@ -594,7 +608,8 @@ export function runFreeScenario(
         mark,
       );
     const favoredOpponentTack = getFavoredTack(config.leg, windAngle);
-    const optimizedManeuver = config.opponentMode === "optimize"
+    const optimizedManeuver = !opponentReachedMark
+      && config.opponentMode === "optimize"
       && time - lastOpponentManeuverTime >= maneuverRecoverySeconds
       && Math.abs(windAngle) >= 4
       && favoredOpponentTack !== null
@@ -606,9 +621,11 @@ export function runFreeScenario(
       if (laylineManeuver) opponentLaylineTackTimes.add(time);
       if (optimizedManeuver) opponentOptimizedTackTimes.add(time);
     }
-    let opponentTack = getTack(time, opponentManeuverTimes);
+    let opponentTack = stoppedOpponentState?.tack ?? getTack(time, opponentManeuverTimes);
     let userSpeed = getSpeed(time, userManeuverTimes, config.leg);
-    let opponentSpeed = getSpeed(time, opponentManeuverTimes, config.leg);
+    let opponentSpeed = opponentReachedMark
+      ? 0
+      : getSpeed(time, opponentManeuverTimes, config.leg);
     const userHeading = getHeading(userTack, windAngle, config.leg);
     let opponentCourseHeading = getHeading(opponentTack, windAngle, config.leg);
     // RRS 10 requires the port-tack boat to keep clear. Under RRS 13, a boat that
@@ -617,7 +634,8 @@ export function runFreeScenario(
     // educational maneuver-recovery window plus one second of safety margin.
     // The downwind gybe window is a teaching-model assumption, not a Rule 13 rule.
     // Source: https://media.sailing.org/sailing/wp-content/uploads/2025/07/29083752/2025-2028-RRS-with-Changes-and-Corrections.pdf
-    const meetingPrediction = userTack === "starboard"
+    const meetingPrediction = !opponentReachedMark
+      && userTack === "starboard"
       && opponentTack === "port"
       ? getMeetingPrediction(
         userPosition,
@@ -659,12 +677,13 @@ export function runFreeScenario(
         maneuverRecoverySeconds,
       ));
     }
-    const opponentHeading = time <= opponentAvoidUntil
-      ? getBearAwayHeading(opponentTack, windAngle, config.leg)
-      : opponentCourseHeading;
+    const opponentHeading = stoppedOpponentState?.heading
+      ?? (time <= opponentAvoidUntil
+        ? getBearAwayHeading(opponentTack, windAngle, config.leg)
+        : opponentCourseHeading);
     const userCleanSpeed = userSpeed;
     const opponentCleanSpeed = opponentSpeed;
-    const userBlanket = getBlanketState({
+    const userBlanket = opponentReachedMark ? null : getBlanketState({
       source: "opponent",
       target: "user",
       sourcePosition: opponentPosition,
@@ -677,7 +696,7 @@ export function runFreeScenario(
       windAngle,
       baseSpeed,
     });
-    const opponentBlanket = getBlanketState({
+    const opponentBlanket = opponentReachedMark ? null : getBlanketState({
       source: "user",
       target: "opponent",
       sourcePosition: userPosition,
@@ -727,13 +746,15 @@ export function runFreeScenario(
     }
 
     userManeuverLoss += baseSpeed - userCleanSpeed;
-    opponentManeuverLoss += baseSpeed - opponentCleanSpeed;
+    if (!opponentReachedMark) opponentManeuverLoss += baseSpeed - opponentCleanSpeed;
     userBlanketLoss += userCleanSpeed - userSpeed;
-    opponentBlanketLoss += opponentCleanSpeed - opponentSpeed;
+    if (!opponentReachedMark) opponentBlanketLoss += opponentCleanSpeed - opponentSpeed;
     if (blanket?.affected === "user") userBlanketSeconds += 1;
     if (blanket?.affected === "opponent") opponentBlanketSeconds += 1;
     userPosition = moveBoat(userPosition, userSpeed, userHeading);
-    opponentPosition = moveBoat(opponentPosition, opponentSpeed, opponentHeading);
+    if (!opponentReachedMark) {
+      opponentPosition = moveBoat(opponentPosition, opponentSpeed, opponentHeading);
+    }
   }
 
   const finalFrame = frames[frames.length - 1];
